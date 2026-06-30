@@ -785,8 +785,8 @@ window.saveSession=async()=>{
   const e=getElapsed();
   console.log('[saveSession] elapsed='+e+' startTime='+startTime+' baseElapsed='+baseElapsed+' running='+running);
   if(e<5){showToast('Estude pelo menos 5 segundos!');return;}
-  if(!startTime&&baseElapsed===0){console.log('[saveSession] Blocked: no startTime and no baseElapsed');return;}
   const sid=document.getElementById('subject-select').value;
+  if(!sid){showToast('Selecione uma matéria!');return;}
   const sessionStart=startTime||new Date(Date.now()-e*1000);
   if(running){running=false;clearInterval(ivl);document.getElementById('btn-play').classList.remove('running');document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';}
   try{
@@ -832,18 +832,22 @@ window.doLogout=async()=>{
 
 window.resetData=async()=>{
   closeProfileModal();
-  bzConfirm('Resetar todos os dados','Isso apagará TODAS as sessões e matérias permanentemente. Esta ação não pode ser desfeita.','danger',()=>{
-    bzPrompt('Confirmação','Digite CONFIRMAR para prosseguir.','CONFIRMAR','CONFIRMAR',async()=>{
-      const{collection,getDocs,deleteDoc,doc:fdoc,setDoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-      const snap=await getDocs(collection(db,`users/${cu.uid}/sessions`));
-      await Promise.all(snap.docs.map(d=>deleteDoc(fdoc(db,`users/${cu.uid}/sessions`,d.id))));
-      await setDoc(fdoc(db,`users/${cu.uid}/data`,'subjects'),{list:[]});
-      await setDoc(fdoc(db,`users/${cu.uid}/data`,'meta'),{horas:0});
-      await setDoc(fdoc(db,`users/${cu.uid}/data`,'provas'),{list:[]});
-      bzAlert('Dados resetados','Todos os dados foram removidos com sucesso.','green');
-      setTimeout(()=>window.location.reload(),1800);
-    });
-  });
+  if(!confirm('⚠️ Resetar TODOS os dados? Isso apagará TODAS as sessões, matérias e metas permanentemente.\n\nDigite CONFIRMAR abaixo para prosseguir.'))return;
+  const confirmText=prompt('Digite CONFIRMAR para confirmar:','');
+  if(confirmText!=='CONFIRMAR'){alert('Cancelado');return;}
+  try{
+    const{collection,getDocs,deleteDoc,doc:fdoc,setDoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const snap=await getDocs(collection(db,`users/${cu.uid}/sessions`));
+    await Promise.all(snap.docs.map(d=>deleteDoc(fdoc(db,`users/${cu.uid}/sessions`,d.id))));
+    await setDoc(fdoc(db,`users/${cu.uid}/data`,'subjects'),{list:[]});
+    await setDoc(fdoc(db,`users/${cu.uid}/data`,'meta'),{horas:0});
+    await setDoc(fdoc(db,`users/${cu.uid}/data`,'provas'),{list:[]});
+    alert('✅ Dados resetados com sucesso!');
+    setTimeout(()=>window.location.reload(),1000);
+  }catch(e){
+    console.error('resetData error',e);
+    alert('❌ Erro ao resetar dados: '+e.message);
+  }
 };
 
 window.deleteAccount=async()=>{
