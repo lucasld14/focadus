@@ -1,0 +1,11 @@
+{
+  "name": "focadus",
+  "version": "1.0.0",
+  "description": "Plataforma premium de estudos",
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "firebase-admin": "11.11.0"
+  }
+}

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pagamento Confirmado — Focadus</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=6">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.svg?v=6">
+  <meta name="theme-color" content="#0E1117">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Focadus">
+  <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@800&family=DM+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      background:#0E1117;color:#F0EDE4;
+      font-family:'Manrope',system-ui,sans-serif;
+      display:flex;align-items:center;justify-content:center;
+      min-height:100vh;padding:24px 16px;
+    }
+    .bg{
+      position:fixed;inset:0;pointer-events:none;
+      background:
+        radial-gradient(ellipse 70% 50% at 20% -10%,rgba(198,154,58,.14) 0%,transparent 60%),
+        radial-gradient(ellipse 50% 40% at 80% 110%,rgba(198,154,58,.08) 0%,transparent 60%);
+    }
+    .card{
+      max-width:500px;width:100%;position:relative;z-index:1;
+      background:rgba(255,255,255,.025);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:24px;padding:2.5rem 2rem;
+      box-shadow:0 32px 80px rgba(0,0,0,.55);
+      animation:cardIn .5s cubic-bezier(.22,1,.36,1);
+    }
+    @keyframes cardIn{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+    .card::before{
+      content:'';position:absolute;top:0;left:15%;right:15%;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(198,154,58,.6),rgba(198,154,58,.4),transparent);
+    }
+
+    .header{text-align:center;margin-bottom:2rem;}
+    .check-circle{
+      width:72px;height:72px;border-radius:50%;margin:0 auto 18px;
+      background:rgba(198,154,58,.12);border:2px solid rgba(198,154,58,.35);
+      display:flex;align-items:center;justify-content:center;
+      animation:popIn .5s cubic-bezier(.22,1,.36,1) .1s both;
+    }
+    @keyframes popIn{from{transform:scale(.5);opacity:0;}to{transform:scale(1);opacity:1;}}
+    .badge{
+      display:inline-block;
+      background:linear-gradient(90deg,#C69A3A,#F5C462);
+      color:#fff;font-size:12px;font-weight:700;
+      padding:4px 14px;border-radius:20px;letter-spacing:.04em;margin-bottom:14px;
+    }
+    h1{font-size:26px;font-weight:700;margin-bottom:8px;letter-spacing:-.4px;}
+    .header-sub{font-size:14px;color:#9A8A70;line-height:1.6;}
+    .header-sub strong{color:#F0EDE4;}
+
+    /* Email pill */
+    .email-pill{
+      background:rgba(198,154,58,.1);border:1px solid rgba(198,154,58,.28);
+      border-radius:12px;padding:12px 16px;margin-bottom:1.75rem;
+      display:flex;align-items:center;gap:10px;
+    }
+    .email-pill svg{flex-shrink:0;color:#C69A3A;}
+    .email-pill-text{font-size:13px;color:#C4C2E8;line-height:1.5;}
+    .email-pill-text strong{color:#C69A3A;}
+    #buyer-email-display{
+      display:inline-block;background:rgba(198,154,58,.15);
+      border-radius:6px;padding:2px 8px;
+      font-family:'DM Sans',monospace;font-size:13px;font-weight:600;color:#C69A3A;
+      word-break:break-all;
+    }
+
+    /* Alert: same email */
+    .email-alert{
+      background:rgba(198,154,58,.1);border:1px solid rgba(198,154,58,.3);
+      border-radius:14px;padding:14px 18px;margin-bottom:1.75rem;
+      display:flex;align-items:flex-start;gap:12px;
+    }
+    .email-alert-icon{flex-shrink:0;margin-top:1px;color:#F5C462;}
+    .email-alert-text{font-size:13.5px;line-height:1.6;color:#C4C2E8;}
+    .email-alert-text strong{color:#F5C462;}
+
+    /* Steps */
+    .steps-title{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#7A7A8A;font-weight:600;margin-bottom:14px;}
+    .steps{display:flex;flex-direction:column;gap:0;margin-bottom:2rem;}
+    .step{display:flex;align-items:flex-start;gap:14px;padding:14px 0;position:relative;}
+    .step:not(:last-child)::after{
+      content:'';position:absolute;left:15px;top:48px;bottom:0;width:2px;
+      background:rgba(255,255,255,.06);
+    }
+    .step-num{
+      width:32px;height:32px;border-radius:50%;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:700;border:2px solid;position:relative;z-index:1;
+    }
+    .step-num.s1{background:rgba(198,154,58,.18);border-color:rgba(198,154,58,.5);color:#F5C462;}
+    .step-num.s2{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#F59E0B;}
+    .step-num.s3{background:rgba(198,154,58,.12);border-color:rgba(198,154,58,.35);color:#C69A3A;}
+    .step-num.s4{background:rgba(198,154,58,.12);border-color:rgba(198,154,58,.4);color:#C69A3A;}
+    .step-body{padding-top:4px;}
+    .step-label{font-size:14px;font-weight:600;color:#F0EDE4;margin-bottom:3px;}
+    .step-desc{font-size:13px;color:#9A8A70;line-height:1.55;}
+    .step-desc strong{color:#F0EDE4;}
+    .step-tag{
+      display:inline-block;margin-top:6px;
+      background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);
+      color:#F59E0B;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;
+    }
+
+    .btn{
+      display:flex;align-items:center;justify-content:center;gap:10px;
+      width:100%;
+      background:linear-gradient(135deg,#B8891F,#C69A3A);
+      color:#fff;font-weight:700;font-size:15px;
+      padding:15px;border-radius:14px;
+      text-decoration:none;transition:all .22s;
+      box-shadow:0 6px 24px rgba(198,154,58,.4);
+      position:relative;overflow:hidden;
+    }
+    .btn::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.1),transparent);pointer-events:none;}
+    .btn:hover{box-shadow:0 10px 32px rgba(198,154,58,.6);transform:translateY(-2px);filter:brightness(1.07);}
+    .btn:active{transform:scale(.98);}
+
+    .help{margin-top:16px;text-align:center;font-size:12px;color:#7A7A8A;line-height:1.7;}
+    .help a{color:#C69A3A;text-decoration:none;}
+    .help a:hover{text-decoration:underline;}
+
+    @media(max-width:480px){
+      .card{padding:1.75rem 1.25rem;border-radius:18px;}
+      h1{font-size:22px;}
+    }
+  </style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="card">
+
+  <div class="header">
+    <div class="check-circle">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C69A3A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 6L9 17l-5-5"/>
+      </svg>
+    </div>
+    <div class="badge">✦ Pagamento confirmado</div>
+    <h1 id="welcome-title">Bem-vindo ao Focadus!</h1>
+    <p class="header-sub">Seu acesso <strong>vitalício Premium</strong> foi ativado.<br>Agora siga os passos abaixo para criar sua conta e entrar.</p>
+  </div>
+
+  <!-- Buyer email (shown when available) -->
+  <div class="email-pill" id="email-pill" style="display:none;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+    <div class="email-pill-text">
+      E-mail da compra: <span id="buyer-email-display"></span><br>
+      <span style="font-size:12px;color:#7A7A8A;">Use exatamente este e-mail ao criar sua conta.</span>
+    </div>
+  </div>
+
+  <!-- Alert when email not available -->
+  <div class="email-alert" id="email-alert">
+    <div class="email-alert-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="email-alert-text">
+      <strong>Importante:</strong> use o <strong>mesmo e-mail que você usou na compra</strong> para criar sua conta — é assim que o sistema identifica seu acesso Premium.
+    </div>
+  </div>
+
+  <div class="steps-title">Como acessar o app</div>
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num s1">1</div>
+      <div class="step-body">
+        <div class="step-label">Crie sua conta</div>
+        <div class="step-desc" id="step1-desc">Clique no botão abaixo. Preencha seu nome, e-mail da compra e escolha uma senha.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num s2">2</div>
+      <div class="step-body">
+        <div class="step-label">Confirme seu e-mail</div>
+        <div class="step-desc">Você receberá um e-mail de confirmação. <strong>Clique no link</strong> para ativar sua conta.</div>
+        <span class="step-tag">Verifique também a caixa de spam</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num s3">3</div>
+      <div class="step-body">
+        <div class="step-label">Faça o login</div>
+        <div class="step-desc">Após confirmar o e-mail, clique em <strong>"Entrar"</strong> e use o mesmo e-mail e senha que você cadastrou.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num s4">4</div>
+      <div class="step-body">
+        <div class="step-label">Acesso Premium liberado!</div>
+        <div class="step-desc">Seu acesso <strong>✦ Premium vitalício</strong> estará ativo automaticamente assim que você entrar.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <a class="btn" id="cta-btn" href="login.html?tab=register">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <line x1="19" y1="8" x2="19" y2="14"/>
+      <line x1="22" y1="11" x2="16" y2="11"/>
+    </svg>
+    Criar minha conta agora
+  </a>
+
+  <div class="help">
+    Já tem uma conta? <a href="login.html">Clique aqui para entrar</a><br>
+    Dúvidas? <a href="mailto:suporte@focadus.com.br">suporte@focadus.com.br</a>
+  </div>
+
+</div>
+
+<script>
+  // Lê parâmetros da URL enviados pela Kiwify
+  const params = new URLSearchParams(location.search);
+
+  // Kiwify pode enviar o email em diferentes campos — tentamos todos
+  const buyerEmail = params.get('email') || params.get('customer_email') || params.get('buyer_email') || '';
+  // Kiwify pode enviar o nome em diferentes campos
+  const buyerName  = params.get('name')  || params.get('customer_name')  || params.get('buyer_name')  || params.get('nome') || '';
+
+  // Mostra o e-mail da compra se disponível
+  if (buyerEmail) {
+    document.getElementById('email-pill').style.display = 'flex';
+    document.getElementById('buyer-email-display').textContent = buyerEmail;
+    document.getElementById('email-alert').style.display = 'none';
+    // Personaliza o passo 1
+    document.getElementById('step1-desc').textContent =
+      'Clique no botão abaixo. Seu nome e e-mail já estarão preenchidos — só escolha uma senha e pronto.';
+  }
+
+  // Personaliza título se tiver nome
+  if (buyerName) {
+    const firstName = buyerName.split(' ')[0];
+    document.getElementById('welcome-title').textContent = `Bem-vindo, ${firstName}!`;
+  }
+
+  // Monta URL do botão com dados pré-preenchidos
+  const registerUrl = new URL('login.html', location.href);
+  registerUrl.searchParams.set('tab', 'register');
+  if (buyerEmail) registerUrl.searchParams.set('email', buyerEmail);
+  if (buyerName)  registerUrl.searchParams.set('name', buyerName);
+  document.getElementById('cta-btn').href = registerUrl.toString();
+</script>
+</body>
+</html>

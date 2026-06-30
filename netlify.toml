@@ -1,0 +1,6 @@
+[build]
+command = "npm install"
+functions = ".netlify/functions"
+
+[functions."send-reminders"]
+runtime = "nodejs18.x"

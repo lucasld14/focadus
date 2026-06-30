@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=6">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.svg?v=6">
+<meta name="theme-color" content="#0E1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Focadus">
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<title>Focadus</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+
+body{
+  font-family:'DM Sans',system-ui,sans-serif;
+  background:#0E1117;
+  min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  color:#F0EDE4;
+  -webkit-font-smoothing:antialiased;
+  overflow-y:auto;
+  padding:16px 0;
+}
+
+/* ── Animated background ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% -10%, rgba(198,154,58,.16) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 80% 110%, rgba(198,154,58,.09) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(198,154,58,.04) 0%, transparent 70%);
+  animation:bgShift 12s ease-in-out infinite alternate;
+}
+@keyframes bgShift{
+  from{background-position:0% 0%;}
+  to{filter:hue-rotate(15deg);}
+}
+
+/* Grid pattern */
+.bg-grid{
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(198,154,58,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(198,154,58,.04) 1px, transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 80%);
+  -webkit-mask-image:radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 80%);
+}
+
+/* ── Card ── */
+.card{
+  background:rgba(255,255,255,.03);
+  backdrop-filter:blur(40px);
+  -webkit-backdrop-filter:blur(40px);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:24px;
+  padding:2.75rem 2.5rem;
+  width:100%;max-width:420px;
+  position:relative;z-index:1;
+  box-shadow:0 32px 80px rgba(0,0,0,.6),0 0 0 1px rgba(198,154,58,.06) inset;
+  animation:cardIn .5s cubic-bezier(.22,1,.36,1);
+  margin:auto;
+}
+@media(max-width:480px){
+  .card{border-radius:18px;padding:2rem 1.25rem;}
+  .logo-mark{width:52px;height:52px;border-radius:14px;}
+  .logo-name{font-size:22px;}
+  input{font-size:16px;padding:13px 14px;}
+  .btn-primary{padding:14px;font-size:15px;}
+  .btn-google{padding:13px;font-size:14px;}
+  .tab{font-size:13px;padding:9px 6px;}
+}
+@keyframes cardIn{
+  from{opacity:0;transform:translateY(24px) scale(.97);}
+  to{opacity:1;transform:translateY(0) scale(1);}
+}
+
+/* Card top glow line */
+.card::before{
+  content:'';
+  position:absolute;top:0;left:15%;right:15%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(198,154,58,.6),rgba(198,154,58,.4),transparent);
+  border-radius:1px;
+}
+
+/* ── Logo ── */
+.logo{text-align:center;margin-bottom:2.25rem;}
+.logo-mark{
+  width:64px;height:64px;
+  background:#0E1117;
+  border-radius:18px;
+  border:1px solid rgba(198,154,58,.25);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 16px;
+  box-shadow:0 0 32px rgba(198,154,58,.18),0 0 0 1px rgba(198,154,58,.1) inset;
+  position:relative;overflow:hidden;
+}
+.logo-mark::after{display:none;}
+.logo-name{
+  font-family:'Manrope',system-ui,sans-serif;
+  font-size:26px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
+}
+.logo-name span{color:#C69A3A;}
+.logo-sub{font-size:13px;color:#7A7A8A;margin-top:5px;letter-spacing:.01em;}
+
+/* ── Tabs ── */
+.tabs{
+  display:flex;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:12px;padding:4px;margin-bottom:1.75rem;gap:3px;
+}
+.tab{
+  flex:1;text-align:center;padding:9px;
+  border-radius:9px;
+  font-family:'Manrope',system-ui,sans-serif;
+  font-size:13.5px;font-weight:500;cursor:pointer;
+  color:#7A7A8A;transition:all .2s;
+}
+.tab.active{
+  background:linear-gradient(135deg,#1F3C61,#274C77);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(39,76,119,.35);
+}
+
+/* ── Form ── */
+.form-group{margin-bottom:1rem;}
+
+label{
+  display:block;
+  font-family:'Manrope',system-ui,sans-serif;
+  font-size:11px;color:#7A7A8A;
+  margin-bottom:7px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.07em;
+}
+
+input{
+  width:100%;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;padding:12px 15px;
+  color:#F0EDE4;font-size:14px;font-family:'DM Sans',sans-serif;
+  outline:none;transition:all .2s;
+}
+input:focus{
+  border-color:#274C77;
+  background:rgba(39,76,119,.06);
+  box-shadow:0 0 0 3px rgba(39,76,119,.14);
+}
+input::placeholder{color:rgba(122,122,138,.6);}
+
+/* ── Buttons ── */
+.btn-primary{
+  width:100%;
+  background:linear-gradient(160deg,#274C77,#1F3C61);
+  color:#fff;border:none;border-radius:12px;
+  padding:13px;
+  font-family:'Manrope',system-ui,sans-serif;
+  font-size:14.5px;font-weight:600;
+  cursor:pointer;margin-top:6px;
+  transition:all .22s;
+  box-shadow:0 6px 24px rgba(39,76,119,.4);
+  position:relative;overflow:hidden;
+}
+.btn-primary::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(255,255,255,.1),transparent);
+  pointer-events:none;
+}
+.btn-primary:hover{
+  box-shadow:0 10px 32px rgba(39,76,119,.55);
+  transform:translateY(-2px);filter:brightness(1.08);
+}
+.btn-primary:active{transform:scale(.98);}
+
+/* ── Divider ── */
+.divider{
+  display:flex;align-items:center;gap:12px;
+  margin:1.5rem 0;
+  font-family:'Manrope',sans-serif;
+  color:#3E3E5E;font-size:12px;font-weight:500;
+}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.06);}
+
+/* ── Google btn ── */
+.btn-google{
+  width:100%;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;padding:12px;
+  font-family:'Manrope',system-ui,sans-serif;
+  font-size:14px;font-weight:500;color:#C69A3A;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  transition:all .2s;
+}
+.btn-google:hover{
+  border-color:rgba(198,154,58,.3);
+  background:rgba(198,154,58,.06);
+  color:#F0EDE4;
+  box-shadow:0 0 18px rgba(198,154,58,.1);
+}
+.btn-google:active{transform:scale(.99);}
+
+/* ── Error ── */
+.error{
+  background:rgba(255,77,109,.08);
+  border:1px solid rgba(255,77,109,.2);
+  border-radius:10px;padding:10px 14px;
+  font-size:13px;color:#FF6B85;
+  margin-bottom:1rem;display:none;
+  font-family:'Manrope',sans-serif;
+}
+
+/* ── Reset password button ── */
+.btn-reset{
+  width:100%;border-radius:10px;
+  font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;
+  padding:11px 20px;cursor:pointer;transition:all .25s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  border:1px solid rgba(198,154,58,.35);
+  background:rgba(198,154,58,.1);color:#F5C462;
+}
+.btn-reset:hover:not(:disabled){
+  background:rgba(198,154,58,.2);border-color:rgba(198,154,58,.55);
+  color:#C69A3A;transform:translateY(-1px);
+  box-shadow:0 4px 16px rgba(198,154,58,.2);
+}
+.btn-reset:disabled{cursor:not-allowed;opacity:.6;}
+.btn-reset.sending{background:rgba(198,154,58,.08);color:#C69A3A;border-color:rgba(198,154,58,.25);}
+.btn-reset.sent{background:rgba(198,154,58,.1);border-color:rgba(198,154,58,.35);color:#C69A3A;}
+.btn-reset.cooldown{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);color:#7A7A8A;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spin-icon{animation:spin .8s linear infinite;display:inline-block;}
+#reset-icon svg,#reset-icon .spin-icon{display:block;}
+
+/* ── Eye toggle ── */
+.pass-wrap{position:relative;}
+.pass-wrap input{padding-right:44px;}
+.eye-btn{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;
+  color:#7A7A8A;padding:4px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  transition:color .18s;
+}
+.eye-btn:hover{color:#F5C462;}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="bg-grid"></div>
+
+<a href="https://focadus.com.br/" style="position:fixed;top:20px;left:20px;display:flex;align-items:center;gap:6px;color:rgba(240,239,255,.45);font-family:'Manrope',sans-serif;font-size:13px;text-decoration:none;transition:color .2s;" onmouseover="this.style.color='rgba(240,239,255,.9)'" onmouseout="this.style.color='rgba(240,239,255,.45)'">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  Início
+</a>
+
+<div class="card">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" overflow="visible">
+        <path d="M3 22C6 22 9 10 12 10C15 10 17 22 20 22C23 22 25 14 28 8" stroke="#C69A3A" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <circle cx="28" cy="8" r="2.8" fill="#F4E3A7"/>
+      </svg>
+    </div>
+    <div class="logo-name">Foca<span>dus</span></div>
+    <div class="logo-sub">Estude com foco e resultado.</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-login" onclick="switchTab('login')">Entrar</div>
+    <div class="tab" id="tab-register" onclick="switchTab('register')">Criar conta</div>
+  </div>
+
+  <div id="error-box" class="error"></div>
+
+  <div id="form-login">
+    <div class="form-group">
+      <label>E-mail</label>
+      <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Senha</label>
+      <div class="pass-wrap">
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+        <button type="button" class="eye-btn" onclick="togglePass('login-password',this)" tabindex="-1" aria-label="Mostrar senha">
+          <svg id="eye-login" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="loginEmail()">Entrar</button>
+    <div style="text-align:center;margin-top:14px;">
+      <button onclick="forgotPassword(event)" style="background:none;border:none;color:#7A7A8A;font-family:'Manrope',sans-serif;font-size:13px;font-weight:500;cursor:pointer;padding:4px;transition:color .2s;" onmouseover="this.style.color='#F5C462'" onmouseout="this.style.color='#7A7A8A'">Esqueci minha senha</button>
+    </div>
+    <div id="forgot-link" style="display:none;margin-top:10px;">
+      <button id="btn-reset" class="btn-reset" onclick="forgotPassword(event)">
+        <span id="reset-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+        <span id="reset-text">Reenviar link de redefinição</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="form-register" style="display:none;">
+    <div id="verify-box" style="display:none;background:rgba(198,154,58,.08);border:1px solid rgba(198,154,58,.25);border-radius:12px;padding:16px;margin-bottom:16px;text-align:center;">
+      <div style="margin-bottom:12px;display:flex;justify-content:center;"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#C69A3A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></div>
+      <div style="font-family:'Manrope',sans-serif;font-weight:700;color:#C69A3A;font-size:15px;margin-bottom:6px;">Confirme seu e-mail</div>
+      <div style="font-size:13px;color:#9A8A70;line-height:1.6;margin-bottom:14px;">Enviamos um link de confirmação para <strong id="verify-email-shown" style="color:#F0EDE4;"></strong>. Clique no link para ativar sua conta.</div>
+      <button id="btn-resend-verify" onclick="resendVerification()" style="background:rgba(198,154,58,.15);border:1px solid rgba(198,154,58,.3);border-radius:10px;color:#C69A3A;font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;padding:9px 20px;cursor:pointer;width:100%;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/></svg><span id="resend-text">Reenviar e-mail de confirmação</span></button>
+      <button onclick="goToLogin()" style="margin-top:10px;background:linear-gradient(135deg,#B8891F,#C69A3A);border:none;border-radius:10px;color:#fff;font-family:'Manrope',sans-serif;font-size:13px;font-weight:700;padding:11px 20px;cursor:pointer;width:100%;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(198,154,58,.35);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Já confirmei meu e-mail — Fazer login
+      </button>
+    </div>
+    <div id="reg-fields">
+      <div class="form-group">
+        <label>Nome</label>
+        <input type="text" id="reg-name" placeholder="Seu nome" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <div class="pass-wrap">
+          <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+          <button type="button" class="eye-btn" onclick="togglePass('reg-password',this)" tabindex="-1" aria-label="Mostrar senha">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="registerEmail()">Criar conta</button>
+      <p style="text-align:center;font-size:11.5px;color:#7A7A8A;margin-top:12px;line-height:1.5;">Ao criar uma conta, você concorda com os <a href="termos.html" target="_blank" style="color:#C69A3A;text-decoration:none;">Termos de Uso</a> e a <a href="privacidade.html" target="_blank" style="color:#C69A3A;text-decoration:none;">Política de Privacidade</a>.</p>
+    </div>
+  </div>
+
+  <div class="divider">ou</div>
+
+  <button class="btn-google" onclick="loginGoogle()">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.5 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 2.9l5.7-5.7C34.5 6.5 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.8 1.1 7.9 2.9l5.7-5.7C34.5 6.5 29.6 4 24 4 16.3 4 9.7 8.4 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.5-5.1l-6.2-5.2C29.4 35.5 26.8 36 24 36c-5.2 0-9.6-3.4-11.2-8.1l-6.5 5C9.5 39.4 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.3 5.6l6.2 5.2C37 38.1 44 33 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+    Continuar com Google
+  </button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, updateProfile, sendEmailVerification, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",
+  authDomain: "brainzept.firebaseapp.com",
+  projectId: "brainzept",
+  storageBucket: "brainzept.firebasestorage.app",
+  messagingSenderId: "187802304063",
+  appId: "1:187802304063:web:00f06e412f1bfa89e7828a"
+};
+
+const app = initializeApp(firebaseConfig);
+initializeAppCheck(app, { provider: new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'), isTokenAutoRefreshEnabled: true });
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+let isRegistering = false;
+
+onAuthStateChanged(auth, user => {
+  if (user && user.emailVerified) {
+    window.location.href = "dashboard.html";
+  } else if (user && !isRegistering) {
+    // Sessão persistida de conta não verificada — desconecta silenciosamente
+    auth.signOut();
+  }
+});
+
+window.togglePass = (id, btn) => {
+  const inp = document.getElementById(id);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.innerHTML = show
+    ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+    : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+};
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideError() { document.getElementById('error-box').style.display = 'none'; }
+
+window.goToLogin = () => {
+  const email = document.getElementById('verify-email-shown').textContent;
+  switchTab('login');
+  if (email) {
+    document.getElementById('login-email').value = email;
+    setTimeout(() => document.getElementById('login-password').focus(), 100);
+  }
+};
+
+window.switchTab = (tab) => {
+  hideError();
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+};
+
+// Abre aba de cadastro e pré-preenche campos se vier da página de obrigado
+const _urlParams = new URLSearchParams(location.search);
+if (_urlParams.get('tab') === 'register') {
+  switchTab('register');
+  const _email = _urlParams.get('email') || '';
+  const _name  = _urlParams.get('name')  || '';
+  if (_email) document.getElementById('reg-email').value = _email;
+  if (_name)  document.getElementById('reg-name').value  = _name;
+  setTimeout(() => {
+    if (_name && _email) { document.getElementById('reg-password').focus(); }
+    else if (_name) { document.getElementById('reg-email').focus(); }
+    else { document.getElementById('reg-name').focus(); }
+  }, 100);
+}
+
+window.loginEmail = async () => {
+  hideError();
+  document.getElementById('forgot-link').style.display='none';
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-password').value;
+  if (!email || !pass) return showError('Preencha e-mail e senha.');
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    if (!cred.user.emailVerified) {
+      await auth.signOut();
+      showError('Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada (e o spam).');
+    }
+    // se verificado, onAuthStateChanged redireciona para dashboard
+  } catch(e) {
+    const code = e.code || '';
+    if (code === 'auth/too-many-requests') {
+      showError('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
+    } else if (code === 'auth/network-request-failed') {
+      showError('Sem conexão. Verifique sua internet e tente novamente.');
+    } else if (code === 'auth/user-disabled') {
+      showError('Esta conta foi desativada. Entre em contato com o suporte.');
+    } else {
+      showError('E-mail ou senha incorretos. Verifique e tente novamente.');
+      document.getElementById('forgot-link').style.display='block';
+    }
+  }
+};
+
+let lastRegisteredUser = null;
+
+window.registerEmail = async () => {
+  hideError();
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-password').value;
+  if (!name || !email || !pass) return showError('Preencha todos os campos.');
+  if (pass.length < 6) return showError('Senha deve ter pelo menos 6 caracteres.');
+  try {
+    isRegistering = true;
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(cred.user, { displayName: name });
+    await sendEmailVerification(cred.user);
+    lastRegisteredUser = cred.user;
+    await auth.signOut();
+    isRegistering = false;
+    document.getElementById('reg-fields').style.display = 'none';
+    document.getElementById('verify-email-shown').textContent = email;
+    document.getElementById('verify-box').style.display = 'block';
+    hideError();
+  } catch(e) {
+    isRegistering = false;
+    if (e.code === 'auth/email-already-in-use') showError('Já existe uma conta com esse e-mail. Faça login na aba "Entrar".');
+    else if (e.code === 'auth/invalid-email') showError('E-mail inválido. Verifique e tente novamente.');
+    else showError('Erro ao criar conta. Tente novamente.');
+  }
+};
+
+window.resendVerification = async () => {
+  const SVG_REFRESH = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/></svg>`;
+  const SVG_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+  try {
+    if (lastRegisteredUser) {
+      await sendEmailVerification(lastRegisteredUser);
+    } else {
+      showError('Faça o cadastro novamente para reenviar o e-mail.');
+      return;
+    }
+    const textEl = document.getElementById('resend-text');
+    const btn = document.getElementById('btn-resend-verify');
+    const iconEl = btn.querySelector('svg');
+    if (iconEl) iconEl.outerHTML = SVG_CHECK;
+    if (textEl) textEl.textContent = 'E-mail reenviado!';
+    btn.style.opacity = '.6';
+    setTimeout(() => {
+      const ic = btn.querySelector('svg');
+      if (ic) ic.outerHTML = SVG_REFRESH;
+      if (textEl) textEl.textContent = 'Reenviar e-mail de confirmação';
+      btn.style.opacity = '1';
+    }, 3000);
+  } catch(e) { showError('Erro ao reenviar. Tente novamente em alguns segundos.'); }
+};
+
+let resetCooldown = null;
+
+window.forgotPassword = async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) return showError('Digite seu e-mail no campo acima e clique novamente.');
+
+  const btn = document.getElementById('btn-reset');
+  const icon = document.getElementById('reset-icon');
+  const text = document.getElementById('reset-text');
+  if (!btn || btn.disabled) return;
+
+  // Sending state
+  const SVG_EMAIL = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>`;
+  const SVG_CHECK = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+  const SVG_SPIN  = `<svg class="spin-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 11-6.2-8.56"/></svg>`;
+  const SVG_CLOCK = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`;
+
+  btn.disabled = true;
+  btn.className = 'btn-reset sending';
+  icon.innerHTML = SVG_SPIN;
+  text.textContent = 'Enviando...';
+  hideError();
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+
+    btn.className = 'btn-reset sent';
+    icon.innerHTML = SVG_CHECK;
+    text.textContent = 'Enviado! Verifique sua caixa de entrada';
+
+    let secs = 30;
+    clearInterval(resetCooldown);
+    resetCooldown = setInterval(() => {
+      secs--;
+      if (secs <= 0) {
+        clearInterval(resetCooldown);
+        btn.disabled = false;
+        btn.className = 'btn-reset';
+        icon.innerHTML = SVG_EMAIL;
+        text.textContent = 'Reenviar link de redefinição';
+      } else {
+        btn.className = 'btn-reset cooldown';
+        icon.innerHTML = SVG_CLOCK;
+        text.textContent = `Reenviar em ${secs}s`;
+      }
+    }, 1000);
+
+  } catch(err) {
+    btn.disabled = false;
+    btn.className = 'btn-reset';
+    icon.innerHTML = SVG_EMAIL;
+    text.textContent = 'Reenviar link de redefinição';
+    if(err.code==='auth/user-not-found') showError('Nenhuma conta encontrada com esse e-mail.');
+    else showError('Erro ao enviar. Verifique o e-mail digitado.');
+  }
+};
+
+window.loginGoogle = async () => {
+  hideError();
+  try { await signInWithPopup(auth, provider); }
+  catch(e) { showError('Erro ao entrar com Google.'); }
+};
+</script>
+</body>
+</html>
+

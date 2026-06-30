@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// ============================================================
+//  REGRAS DE SEGURANÇA DO FIRESTORE — Focadus
+// ------------------------------------------------------------
+//  COMO APLICAR:
+//  1. Firebase Console → projeto "brainzept"
+//  2. Build → Firestore Database → aba "Rules" (Regras)
+//  3. Cole TODO este conteúdo, substituindo o que estiver lá
+//  4. Clique em "Publish" (Publicar)
+//
+//  ⚠️ ATENÇÃO: este projeto Firebase ("brainzept") é COMPARTILHADO
+//  com o app BrainZept. Estas regras cobrem os caminhos do Focadus.
+//  Se o BrainZept usar OUTRAS coleções (fora de users/{uid} e
+//  pagantes), elas serão BLOQUEADAS por padrão. Antes de publicar,
+//  confirme quais caminhos o BrainZept usa e adicione-os aqui —
+//  ou (recomendado) crie um projeto Firebase próprio para o Focadus.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----- Dados de cada usuário -----
+    // Tudo dentro de users/{uid}/... (profile, meta, provas, subjects,
+    // notes, timerState, sessions, cronograma) só pode ser lido/escrito
+    // pelo PRÓPRIO dono autenticado. Um usuário NUNCA acessa os dados
+    // de outro.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // ----- Lista de pagantes (acesso vitalício) -----
+    // O app só consulta o PRÓPRIO registro (query email == seu e-mail).
+    // - Leitura: permitida apenas para o dono daquele e-mail.
+    //   Assim ninguém consegue listar/vazar e-mails de outros pagantes.
+    // - Escrita: TOTALMENTE BLOQUEADA pelo app. Pagantes só são
+    //   adicionados manualmente no Console ou por um webhook de servidor
+    //   (Cloud Function / Admin SDK), que ignora estas regras.
+    //   Isso impede que alguém se libere de graça pelo navegador.
+    match /pagantes/{docId} {
+      allow read: if request.auth != null
+                  && request.auth.token.email == resource.data.email;
+      allow write: if false;
+    }
+
+    // ----- Qualquer outro caminho -----
+    // Negado por padrão. Nada além do que está acima é acessível.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

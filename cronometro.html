@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=6">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.svg?v=6">
+<meta name="theme-color" content="#0E1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Focadus">
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<title>Focadus — Cronômetro</title>
+<style>
+.timer-center{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:1.75rem;padding:2rem 1rem;}
+
+/* ── Custom subject select ── */
+.custom-select-wrap{position:relative;width:100%;max-width:360px;}
+.custom-select-btn{
+  width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:14px;padding:12px 16px;
+  color:var(--muted);font-size:14px;font-weight:500;
+  cursor:pointer;font-family:var(--font);transition:all .22s;
+  display:flex;align-items:center;gap:10px;text-align:left;
+}
+.custom-select-btn.has-value{color:var(--text);}
+.custom-select-btn:hover,.custom-select-btn.open{border-color:var(--blue);background:rgba(198,154,58,.06);box-shadow:0 0 0 3px var(--blue-glow);}
+.custom-select-btn .chevron{margin-left:auto;opacity:.45;transition:transform .2s;flex-shrink:0;}
+.custom-select-btn.open .chevron{transform:rotate(180deg);}
+.sel-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--muted);opacity:.35;transition:all .2s;}
+.custom-select-drop{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;
+  background:rgba(14,17,23,.98);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+  border:1px solid rgba(198,154,58,.25);border-radius:14px;
+  overflow:hidden;z-index:500;
+  box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04) inset;
+  animation:dropIn .16s cubic-bezier(.22,1,.36,1);
+}
+@keyframes dropIn{from{opacity:0;transform:translateY(-8px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
+.select-opt{
+  display:flex;align-items:center;gap:10px;padding:11px 16px;
+  cursor:pointer;font-size:13.5px;font-family:var(--font);font-weight:500;
+  transition:background .15s;color:var(--muted);
+}
+.select-opt:hover{background:rgba(198,154,58,.1);color:var(--text);}
+.select-opt.active{color:var(--blue);background:rgba(198,154,58,.07);}
+.select-opt-placeholder{color:var(--muted);font-style:italic;}
+
+/* ── Timer ring ── */
+.ring-wrap{position:relative;width:min(300px,80vw);height:min(300px,80vw);}
+.ring-svg{width:100%;height:100%;transform:rotate(-90deg);}
+.ring-bg{fill:none;stroke:rgba(255,255,255,.09);stroke-width:6;}
+.ring-fill{fill:none;stroke:#C69A3A;stroke-width:6;stroke-linecap:round;stroke-dasharray:791;stroke-dashoffset:791;transition:stroke-dashoffset .5s ease,stroke .3s;filter:drop-shadow(0 0 8px rgba(198,154,58,.5));}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;}
+.timer-time{font-size:clamp(26px,8.5vw,40px);font-weight:600;letter-spacing:2px;font-variant-numeric:tabular-nums;line-height:1;text-align:center;font-family:'JetBrains Mono',monospace;}
+.timer-sub{font-size:12px;color:var(--muted);margin-top:8px;letter-spacing:.06em;}
+
+/* ── Controls ── */
+.controls{display:flex;gap:16px;align-items:center;}
+.btn-round{width:62px;height:62px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .22s;}
+.btn-round:active{transform:scale(.92);}
+.btn-play{background:linear-gradient(135deg,var(--blue-dark),var(--blue));color:#fff;box-shadow:0 0 28px rgba(198,154,58,.45);}
+.btn-play:hover{box-shadow:0 0 40px rgba(198,154,58,.65);transform:scale(1.07);}
+.btn-play.running{background:linear-gradient(135deg,#c1374a,var(--red));box-shadow:0 0 28px rgba(255,77,109,.4);animation:pulseBeat 2s ease infinite;}
+@keyframes pulseBeat{0%,100%{box-shadow:0 0 24px rgba(255,77,109,.3);}50%{box-shadow:0 0 44px rgba(255,77,109,.65);}}
+.btn-reset{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);}
+.btn-reset:hover{border-color:var(--blue);color:var(--blue);background:rgba(198,154,58,.08);}
+.btn-save{background:linear-gradient(135deg,#B8891F,var(--green));color:#fff;box-shadow:0 0 20px rgba(198,154,58,.25);}
+.btn-save:hover{box-shadow:0 0 36px rgba(198,154,58,.5);transform:scale(1.07);}
+
+/* ── Focus btn ── */
+.focus-btn{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:12px;padding:9px 22px;
+  color:var(--muted);font-size:13px;cursor:pointer;
+  transition:all .22s;font-family:var(--font);
+}
+.focus-btn:hover{border-color:var(--blue);color:var(--blue);background:rgba(198,154,58,.07);box-shadow:0 0 18px rgba(198,154,58,.15);}
+
+/* ── Sessions ── */
+.sessions-wrap{width:100%;max-width:480px;}
+.sessions-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;font-weight:600;}
+.session-row{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:10px;margin-bottom:6px;
+  transition:border-color .18s;
+}
+.session-row:hover{border-color:rgba(198,154,58,.2);}
+
+/* ── Focus overlay ── */
+.focus-overlay{display:none;position:fixed;inset:0;background:rgba(10,12,17,.97);backdrop-filter:blur(2px);z-index:99999;flex-direction:column;align-items:center;justify-content:center;gap:2rem;}
+.focus-overlay.active{display:flex;}
+.focus-time{
+  font-size:clamp(72px,14vw,150px);font-weight:200;letter-spacing:8px;
+  font-variant-numeric:tabular-nums;color:#F0EDE4;
+  text-shadow:0 0 60px rgba(198,154,58,.4),0 0 120px rgba(198,154,58,.15);
+  line-height:1;font-family:'JetBrains Mono',monospace;
+}
+.focus-subject{font-size:15px;color:var(--blue);font-weight:500;letter-spacing:.2em;text-transform:uppercase;opacity:.8;}
+.focus-exit{
+  background:none;border:1px solid rgba(255,255,255,.08);border-radius:10px;
+  padding:10px 28px;color:rgba(255,255,255,.25);font-size:13px;
+  cursor:pointer;font-family:var(--font);transition:all .3s;letter-spacing:.06em;
+}
+.focus-exit:hover{border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.55);}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:6rem;left:50%;transform:translateX(-50%);background:rgba(198,154,58,.15);border:1px solid rgba(198,154,58,.3);color:var(--green);padding:10px 22px;border-radius:12px;font-size:13px;font-weight:500;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999;backdrop-filter:blur(12px);}
+.toast.show{opacity:1;}
+
+@media(max-width:600px){
+  .sessions-wrap{max-width:100%;}
+  .custom-select-wrap{max-width:100%;}
+}
+@media(max-width:480px){
+  .timer-center{gap:1rem;padding:.75rem .5rem;}
+  .btn-round{width:52px;height:52px;}
+  .btn-round svg{width:18px;height:18px;}
+  .pom-config{gap:8px;}
+  .pom-cfg-inp{width:48px;font-size:14px;}
+  .mode-btn{padding:6px 14px;font-size:12px;}
+  .focus-time{font-size:clamp(56px,16vw,120px);}
+}
+@media(max-width:360px){
+  .timer-center{gap:.75rem;}
+  .btn-round{width:46px;height:46px;}
+  .controls{gap:10px;}
+  .pom-config{flex-wrap:wrap;gap:6px;}
+}
+
+/* ── Mode toggle ── */
+.mode-toggle{display:flex;align-items:center;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:100px;padding:3px;gap:2px;}
+.mode-btn{padding:7px 20px;border-radius:100px;border:none;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .22s;color:var(--muted);background:none;}
+.mode-btn.active{background:linear-gradient(135deg,var(--blue-dark),var(--blue));color:#fff;box-shadow:0 2px 12px rgba(198,154,58,.35);}
+/* ── Pomodoro config ── */
+.pom-config{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;animation:fadeIn .2s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+.pom-cfg-item{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.pom-cfg-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+.pom-cfg-inp{width:56px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:6px 8px;color:var(--text);font-family:var(--font-d);font-size:16px;font-weight:700;text-align:center;transition:all .18s;-moz-appearance:textfield;}
+.pom-cfg-inp::-webkit-outer-spin-button,.pom-cfg-inp::-webkit-inner-spin-button{-webkit-appearance:none;}
+.pom-cfg-inp:focus{outline:none;border-color:var(--blue);background:rgba(198,154,58,.07);}
+/* Pomodoro phase colors */
+.ring-fill.phase-work{stroke:#C69A3A;}
+.ring-fill.phase-short{stroke:#C69A3A;}
+.ring-fill.phase-long{stroke:#F59E0B;}
+/* Pomodoro cycle dots */
+.pom-dots{display:flex;align-items:center;gap:6px;}
+.pom-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.12);transition:all .3s;}
+.pom-dot.done{background:#C69A3A;box-shadow:0 0 6px rgba(198,154,58,.6);}
+.pom-dot.current{background:#C69A3A;box-shadow:0 0 10px rgba(198,154,58,.8);transform:scale(1.3);}
+/* Light theme overrides */
+[data-theme="light"] .custom-select-btn{background:rgba(0,0,0,.04);border-color:rgba(198,154,58,.18);}
+[data-theme="light"] .custom-select-drop{background:rgba(255,255,255,.99);border-color:rgba(198,154,58,.2);box-shadow:0 20px 60px rgba(198,154,58,.12);}
+[data-theme="light"] .select-opt{color:var(--muted);}
+[data-theme="light"] .select-opt:hover{background:rgba(198,154,58,.08);color:var(--text);}
+[data-theme="light"] .session-row{background:rgba(0,0,0,.04);border-color:rgba(198,154,58,.12);}
+[data-theme="light"] .btn-reset{background:rgba(0,0,0,.05);border-color:rgba(198,154,58,.18);}
+[data-theme="light"] .ring-bg{stroke:rgba(0,0,0,.07);}
+[data-theme="light"] .focus-btn{background:rgba(0,0,0,.04);border-color:rgba(198,154,58,.18);}
+[data-theme="light"] .sessions-label{color:var(--muted);}
+[data-theme="light"] .mode-toggle{background:rgba(0,0,0,.04);}
+[data-theme="light"] .pom-cfg-inp{background:rgba(0,0,0,.04);}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo"><svg width="150" height="36" viewBox="0 0 150 36" overflow="visible" fill="none"><path d="M4 24C9 24 13 6 18 6C23 6 27 24 32 24C37 24 41 6 46 6" stroke="#C69A3A" stroke-width="2.5" stroke-linecap="round" fill="none"/><circle cx="46" cy="6" r="4" fill="#F4E3A7"/><text x="58" y="22" font-family="Manrope,system-ui,sans-serif" font-size="17" font-weight="800" fill="#F0EDE4">Foca<tspan font-weight="700" fill="#C69A3A">dus</tspan></text></svg></div>
+  <a class="nav-item" href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Dashboard</span></a>
+  <a class="nav-item active" href="cronometro.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9.5 2.5h5M12 2.5V5"/></svg><span>Cronômetro</span></a>
+  <a class="nav-item" href="cronograma.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg><span>Cronograma</span></a>
+  <a class="nav-item" href="graficos.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H3"/><path d="M7 10v11M11 4v17M15 8v13M19 14v7"/></svg><span>Gráficos</span></a>
+  <a class="nav-item" href="metas.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg><span>Metas</span></a>
+  <a class="nav-item" href="provas.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Provas</span></a>
+  <div class="nav-bottom">
+    <div class="user-chip" onclick="openProfileModal()">
+      <div class="avatar-el" id="avatar-el">?</div>
+      <div style="min-width:0;flex:1;"><div class="user-name-row"><span class="user-name-el" id="user-name-el">...</span></div><div class="user-edit-label"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg> Editar perfil</div></div>
+      <span class="nav-arrow">›</span>
+    </div>
+  </div>
+</nav>
+
+<main class="main" style="display:flex;flex-direction:column;padding:0;">
+  <div class="timer-center">
+
+    <!-- Mode toggle -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btn-mode-livre" onclick="setMode('livre')">Livre</button>
+      <button class="mode-btn" id="btn-mode-pom" onclick="setMode('pomodoro')">Pomodoro</button>
+    </div>
+
+    <!-- Pomodoro config (hidden in livre mode) -->
+    <div class="pom-config" id="pom-config" style="display:none;">
+      <div class="pom-cfg-item">
+        <span class="pom-cfg-label">Foco (min)</span>
+        <input class="pom-cfg-inp" id="pom-work" type="number" min="1" max="90" value="25" onchange="resetTimer()">
+      </div>
+      <div class="pom-cfg-item">
+        <span class="pom-cfg-label">Pausa curta</span>
+        <input class="pom-cfg-inp" id="pom-short" type="number" min="1" max="30" value="5" onchange="resetTimer()">
+      </div>
+      <div class="pom-cfg-item">
+        <span class="pom-cfg-label">Pausa longa</span>
+        <input class="pom-cfg-inp" id="pom-long" type="number" min="1" max="60" value="15" onchange="resetTimer()">
+      </div>
+      <div class="pom-cfg-item">
+        <span class="pom-cfg-label">Ciclos</span>
+        <input class="pom-cfg-inp" id="pom-cycles" type="number" min="2" max="8" value="4" onchange="resetTimer();renderPomDots()">
+      </div>
+    </div>
+
+    <!-- Pomodoro cycle dots (hidden in livre mode) -->
+    <div class="pom-dots" id="pom-dots" style="display:none;"></div>
+
+    <!-- Custom subject select -->
+    <div class="custom-select-wrap" id="subject-wrap">
+      <button class="custom-select-btn" id="subject-btn" type="button" onclick="toggleSubjectDrop()">
+        <span class="sel-dot" id="sel-dot"></span>
+        <span id="subject-label" style="flex:1;">Selecione uma matéria...</span>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="custom-select-drop" id="subject-drop" style="display:none;"></div>
+    </div>
+    <select id="subject-select" style="display:none;"></select>
+
+    <!-- Timer ring -->
+    <div class="ring-wrap">
+      <svg class="ring-svg" viewBox="0 0 280 280">
+        <circle class="ring-bg" cx="140" cy="140" r="126"/>
+        <circle class="ring-fill" id="ring" cx="140" cy="140" r="126"/>
+      </svg>
+      <div class="ring-center">
+        <div class="timer-time" id="timer-time">00:00:00</div>
+        <div class="timer-sub" id="timer-sub">Pronto para estudar</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn-round btn-reset" onclick="resetTimer()" title="Resetar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+      <button class="btn-round btn-play" id="btn-play" onclick="toggleTimer()"><svg id="play-icon" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z"/></svg></button>
+      <button class="btn-round btn-save" onclick="saveSession()" title="Salvar sessão"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>
+    </div>
+
+    <button class="focus-btn" onclick="toggleFocus()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      Modo foco
+    </button>
+
+    <div class="sessions-wrap">
+      <div class="sessions-label">Sessões de hoje</div>
+      <div id="sessions-today"></div>
+    </div>
+
+  </div>
+</main>
+
+<!-- MODO FOCO -->
+<div class="focus-overlay" id="focus-overlay">
+  <div class="focus-subject" id="focus-subject"></div>
+  <div class="focus-time" id="focus-time">00:00:00</div>
+  <div class="focus-exit" onclick="toggleFocus()">ESC para sair</div>
+</div>
+
+<!-- MODAL PERFIL -->
+<div class="modal-overlay" id="modal-profile" onclick="if(event.target===this)closeProfileModal()">
+  <div class="modal-box">
+    <div class="modal-title">Editar perfil</div>
+    <div style="text-align:center;margin-bottom:1.25rem;">
+      <div class="profile-avatar-big" id="profile-avatar-big" onclick="document.getElementById('photo-file').click()"></div>
+      <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(this)">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Clique na foto para alterar</div>
+    </div>
+    <label class="modal-label">Nome</label>
+    <input class="modal-input" type="text" id="profile-name-inp" placeholder="Seu nome">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeProfileModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveProfile()">Salvar</button>
+    </div>
+    <!-- Ações da conta -->
+    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:500;margin-bottom:10px;">Conta</div>
+      <button onclick="doLogout()" class="account-action-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sair da conta</button>
+      <button onclick="resetData()" class="account-action-btn amber"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> Resetar todos os dados</button>
+      <button onclick="deleteAccount()" class="account-action-btn danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Excluir conta permanentemente</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="dialogs.js"></script>
+<script src="notifications.js"></script>
+<script src="firebase-messaging.js"></script>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import{initializeAppCheck,ReCaptchaV3Provider}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
+import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import{getFirestore,doc,getDoc,setDoc,collection,addDoc,query,where,getDocs,onSnapshot,deleteDoc,orderBy,Timestamp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
+const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
+let cu,subjects=[],baseElapsed=0,running=false,ivl=null,startTime=null;
+let pomMode=false,pomPhase='work',pomLeft=0,pomTotal=0,pomCyclesDone=0,pomAutoTimer=null;
+const C=2*Math.PI*126;
+
+// ── Pomodoro helpers ──────────────────────────────────────────────────────
+function pomWorkSecs(){return(parseInt(document.getElementById('pom-work').value)||25)*60;}
+function pomShortSecs(){return(parseInt(document.getElementById('pom-short').value)||5)*60;}
+function pomLongSecs(){return(parseInt(document.getElementById('pom-long').value)||15)*60;}
+function pomMaxCycles(){return parseInt(document.getElementById('pom-cycles').value)||4;}
+
+function beep(type='work'){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const freqs=type==='work'?[440,550,660]:type==='short'?[660,550]:[880,660,880];
+    let t=ctx.currentTime;
+    freqs.forEach(f=>{
+      const o=ctx.createOscillator();const g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.frequency.value=f;o.type='sine';
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.18,t+.01);
+      g.gain.exponentialRampToValueAtTime(.001,t+.4);
+      o.start(t);o.stop(t+.4);t+=.22;
+    });
+  }catch(e){}
+}
+
+window.renderPomDots=function(){
+  const dots=document.getElementById('pom-dots');if(!dots)return;
+  const max=pomMaxCycles();
+  dots.innerHTML=Array.from({length:max},(_,i)=>{
+    const cls=i<pomCyclesDone?'done':i===pomCyclesDone&&pomPhase==='work'&&running?'current':'';
+    return`<div class="pom-dot ${cls}"></div>`;
+  }).join('');
+};
+
+function advancePhase(){
+  const ring=document.getElementById('ring');
+  if(pomPhase==='work'){
+    pomCyclesDone++;
+    // Auto-save the work session
+    const sid=document.getElementById('subject-select').value;
+    if(sid&&pomWorkSecs()>10){
+      const sessionStart=new Date(Date.now()-pomWorkSecs()*1000);
+      import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js").then(async({collection,addDoc,Timestamp})=>{
+        await addDoc(collection(db,`users/${cu.uid}/sessions`),{subjectId:sid,duration:pomWorkSecs(),startedAt:Timestamp.fromDate(sessionStart),savedAt:Timestamp.now(),pomodoro:true});
+        showToast('Sessão salva automaticamente!');
+        await loadToday();
+      });
+    }
+    // Decide next phase
+    const isLong=pomCyclesDone%pomMaxCycles()===0;
+    pomPhase=isLong?'long':'short';
+    pomTotal=isLong?pomLongSecs():pomShortSecs();
+    beep(pomPhase);
+    ring.className='ring-fill phase-'+pomPhase;
+  }else{
+    pomPhase='work';
+    pomTotal=pomWorkSecs();
+    beep('work');
+    ring.className='ring-fill phase-work';
+  }
+  pomLeft=pomTotal;
+  renderPomDots();
+  updateDisplay();
+  // Auto-start next phase after 3s
+  const label=pomPhase==='work'?'Hora de focar!':(pomPhase==='short'?'Pausa curta!':'Pausa longa — descanse bem!');
+  showToast(label);
+  updateDisplay();
+  pomAutoTimer=setTimeout(()=>{
+    if(!pomMode)return;
+    running=true;
+    document.getElementById('btn-play').classList.add('running');
+    document.getElementById('play-icon').innerHTML='<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    document.getElementById('timer-sub').textContent=label;
+    ivl=setInterval(pomTick,1000);
+  },3000);
+}
+
+function pomTick(){
+  if(!running||!pomMode)return;
+  pomLeft--;
+  updateDisplay();
+  if(pomLeft<=0){running=false;clearInterval(ivl);ivl=null;advancePhase();return;}
+  saveTimerState();
+}
+
+window.setMode=function(mode){
+  pomMode=mode==='pomodoro';
+  document.getElementById('btn-mode-livre').classList.toggle('active',!pomMode);
+  document.getElementById('btn-mode-pom').classList.toggle('active',pomMode);
+  document.getElementById('pom-config').style.display=pomMode?'flex':'none';
+  document.getElementById('pom-dots').style.display=pomMode?'flex':'none';
+  resetTimer();
+  if(pomMode)renderPomDots();
+};
+
+/* Elapsed real = baseElapsed + tempo desde startTime.
+   Funciona mesmo quando a aba fica em segundo plano (browser throttles setInterval
+   mas Date.now() sempre reflete o tempo real). */
+function getElapsed(){
+  if(running&&startTime) return baseElapsed+Math.floor((Date.now()-startTime.getTime())/1000);
+  return baseElapsed;
+}
+
+let _fsyncTimeout=null;
+function saveTimerState(){
+  const sid=document.getElementById('subject-select').value;
+  const sub=subjects.find(x=>x.id===sid);
+  const state={
+    baseElapsed,running,
+    startTime:startTime?startTime.toISOString():null,
+    subjectId:sid||null,subjectName:sub?.name||'',subjectColor:sub?.color||''
+  };
+  localStorage.setItem('bz-timer',JSON.stringify(state));
+  // Sync para Firestore a cada 30s (debounced) — para cross-device
+  if(cu){
+    clearTimeout(_fsyncTimeout);
+    _fsyncTimeout=setTimeout(()=>{
+      setDoc(doc(db,`users/${cu.uid}/data`,'timerState'),{...state,syncedAt:Date.now()},{merge:true}).catch(()=>{});
+    },running?30000:500);
+  }
+}
+
+async function syncTimerToFirestore(){
+  if(!cu)return;
+  const sid=document.getElementById('subject-select').value;
+  const sub=subjects.find(x=>x.id===sid);
+  await setDoc(doc(db,`users/${cu.uid}/data`,'timerState'),{
+    baseElapsed,running,
+    startTime:startTime?startTime.toISOString():null,
+    subjectId:sid||null,subjectName:sub?.name||'',subjectColor:sub?.color||'',
+    syncedAt:Date.now()
+  },{merge:true}).catch(()=>{});
+}
+
+async function restoreTimerFromFirestore(){
+  if(!cu)return;
+  try{
+    const snap=await getDoc(doc(db,`users/${cu.uid}/data`,'timerState'));
+    if(!snap.exists())return;
+    const sv=snap.data();
+    const local=JSON.parse(localStorage.getItem('bz-timer')||'{}');
+    // Usa Firestore se for mais recente que o localStorage
+    if((sv.syncedAt||0)>(local.syncedAt||0)){
+      localStorage.setItem('bz-timer',JSON.stringify({...sv,syncedAt:sv.syncedAt}));
+    }
+  }catch(e){}
+}
+
+function restoreTimerState(){
+  const raw=localStorage.getItem('bz-timer');
+  if(!raw)return;
+  let sv;try{sv=JSON.parse(raw);}catch(e){return;}
+  if(!sv)return;
+  baseElapsed=sv.baseElapsed||0;
+  startTime=sv.startTime?new Date(sv.startTime):null;
+  if(sv.running&&startTime){
+    running=true;
+    document.getElementById('btn-play').classList.add('running');
+    document.getElementById('play-icon').innerHTML='<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    document.getElementById('timer-sub').textContent='Estudando...';
+    ivl=setInterval(()=>{updateDisplay();saveTimerState();},1000);
+  }else if(baseElapsed>0){
+    running=false;startTime=null;
+    document.getElementById('timer-sub').textContent='Pausado';
+  }
+  updateDisplay();
+}
+
+const th=localStorage.getItem('bz-theme')||'dark';
+document.documentElement.setAttribute('data-theme',th);
+
+function showPaywall(){
+  document.body.innerHTML=`<style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#0E1117;color:#F0EDE4;font-family:'Manrope',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
+    .pw{max-width:420px;width:100%;text-align:center;}
+    .pw-icon{font-size:56px;margin-bottom:20px;}
+    .pw h1{font-size:26px;font-weight:700;margin-bottom:10px;}
+    .pw p{color:#9A8A70;line-height:1.6;margin-bottom:28px;}
+    .pw-btn{display:inline-block;background:#C69A3A;color:#fff;font-weight:700;font-size:16px;padding:14px 36px;border-radius:12px;text-decoration:none;transition:opacity .2s;}
+    .pw-btn:hover{opacity:.85;}
+    .pw-logout{margin-top:16px;font-size:13px;color:#9A8A70;cursor:pointer;background:none;border:none;}
+    .pw-logout:hover{color:#F0EDE4;}
+  </style>
+  <div class="pw">
+    <div class="pw-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+    <h1>Acesso Premium</h1>
+    <p>Seu período de avaliação gratuita expirou.<br>Adquira o acesso vitalício por apenas <strong style="color:#C69A3A">R$29</strong> e continue estudando sem limites.</p>
+    <a class="pw-btn" href="https://pay.kiwify.com.br/cZGAGEi" target="_blank">Desbloquear Agora — R$29</a><br>
+    <button class="pw-logout" onclick="import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js').then(m=>m.signOut(m.getAuth())).finally(()=>{window.location.href='https://focadus.com.br/';})">Sair da conta</button>
+  </div>`;
+}
+async function checkAccess(user){
+  const snap=await getDocs(query(collection(db,'pagantes'),where('email','==',user.email)));
+  if(!snap.empty) return {ok:true,trial:false,daysLeft:0};
+  const created=new Date(user.metadata.creationTime);
+  const diffDays=(Date.now()-created.getTime())/(1000*60*60*24);
+  const daysLeft=Math.max(0,7-Math.floor(diffDays));
+  if(daysLeft>0) return {ok:true,trial:true,daysLeft};
+  return {ok:false,trial:false,daysLeft:0};
+}
+function showTrialBanner(daysLeft){
+  const bar=document.createElement('div');
+  bar.id='trial-bar';
+  bar.innerHTML=`<style>
+#trial-bar{position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#F59E0B,#F97316);color:#000;font-family:'Manrope',sans-serif;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;padding:5px 16px;height:32px;}
+#trial-bar a{background:#000;color:#fff;padding:3px 12px;border-radius:6px;text-decoration:none;font-size:11px;white-space:nowrap;flex-shrink:0;}
+.sidebar{top:32px!important;}
+.main{padding-top:calc(var(--topbar-h,60px) + 32px)!important;}
+</style><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Período gratuito — <strong>${daysLeft} dia${daysLeft===1?'':'s'}</strong> restante${daysLeft===1?'':'s'}. Após isso seu acesso será bloqueado.
+<a href="https://pay.kiwify.com.br/cZGAGEi" target="_blank">Garantir acesso — R$29</a>`;
+  document.body.prepend(bar);
+}
+function showPremiumBadge(){
+  const nameEl=document.getElementById('user-name-el');
+  if(nameEl&&!document.getElementById('premium-badge')){
+    const badge=document.createElement('span');
+    badge.id='premium-badge';
+    badge.textContent='✦ Premium';
+    badge.style.cssText='display:inline-block;background:linear-gradient(90deg,#C69A3A,#F5C462);color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.04em;white-space:nowrap;flex-shrink:0;';
+    nameEl.parentNode.appendChild(badge);
+  }
+}
+
+onAuthStateChanged(auth,async user=>{
+  if(!user){window.location.href='login.html';return;}
+  cu=user;
+  const access=await checkAccess(user);
+  if(!access.ok){showPaywall();return;}
+  if(access.trial){showTrialBanner(access.daysLeft);}else{setTimeout(()=>showPremiumBadge(),500);}
+  const pSnap=await getDoc(doc(db,`users/${cu.uid}/data`,'profile'));
+  const pData=pSnap.exists()?pSnap.data():{};
+  const name=pData.name||user.displayName||user.email.split('@')[0];
+  window._profilePhoto=pData.photo||null;
+  setAvatar(name,window._profilePhoto);
+  await restoreTimerFromFirestore();
+  await loadSubjects();await loadToday();
+});
+
+function setAvatar(name,photo){
+  const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+  const av=document.getElementById('avatar-el');
+  if(photo)av.innerHTML=`<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  else av.textContent=initials;
+  document.getElementById('user-name-el').textContent=name;
+}
+
+async function loadSubjects(){
+  const s=await getDoc(doc(db,`users/${cu.uid}/data`,'subjects'));
+  subjects=s.exists()?s.data().list||[]:[];
+  const sel=document.getElementById('subject-select');
+  sel.innerHTML='<option value="">Selecione uma matéria...</option>';
+  subjects.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.name;sel.appendChild(o);});
+  populateCustomSelect();
+  // Restaura matéria e estado do timer a partir do localStorage
+  const raw=localStorage.getItem('bz-timer');
+  if(raw){try{const sv=JSON.parse(raw);if(sv&&sv.subjectId&&subjects.find(x=>x.id===sv.subjectId)){selectSubject(sv.subjectId,sv.subjectName,sv.subjectColor||'#C69A3A');}}catch(e){}}
+  restoreTimerState();
+}
+
+function populateCustomSelect(){
+  const drop=document.getElementById('subject-drop');
+  const placeholder=`<div class="select-opt select-opt-placeholder" onclick="selectSubject('','','')"><span style="width:9px;height:9px;border-radius:50%;background:var(--muted);opacity:.3;display:inline-block;flex-shrink:0;"></span><span>Selecione uma matéria...</span></div>`;
+  const opts=subjects.map(s=>`<div class="select-opt" onclick="selectSubject('${s.id}','${s.name}','${s.color}')"><span style="width:9px;height:9px;border-radius:50%;background:${s.color};display:inline-block;flex-shrink:0;box-shadow:0 0 6px ${s.color}88;"></span><span>${s.name}</span></div>`).join('');
+  drop.innerHTML=placeholder+opts;
+}
+window.toggleSubjectDrop=()=>{
+  const drop=document.getElementById('subject-drop');
+  const btn=document.getElementById('subject-btn');
+  const open=drop.style.display!=='none';
+  drop.style.display=open?'none':'block';
+  btn.classList.toggle('open',!open);
+};
+window.selectSubject=(id,name,color)=>{
+  document.getElementById('subject-select').value=id;
+  const lbl=document.getElementById('subject-label');
+  const dot=document.getElementById('sel-dot');
+  const btn=document.getElementById('subject-btn');
+  lbl.textContent=id?name:'Selecione uma matéria...';
+  dot.style.background=id?color:'var(--muted)';
+  dot.style.opacity=id?'1':'0.35';
+  dot.style.boxShadow=id?`0 0 7px ${color}99`:'none';
+  btn.classList.toggle('has-value',!!id);
+  document.getElementById('subject-drop').style.display='none';
+  btn.classList.remove('open');
+};
+document.addEventListener('click',e=>{
+  const wrap=document.getElementById('subject-wrap');
+  if(wrap&&!wrap.contains(e.target)){
+    document.getElementById('subject-drop').style.display='none';
+    document.getElementById('subject-btn').classList.remove('open');
+  }
+});
+
+async function loadToday(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const q=query(collection(db,`users/${cu.uid}/sessions`),where('startedAt','>=',Timestamp.fromDate(today)),orderBy('startedAt','desc'));
+  const snap=await getDocs(q);
+  window._todaySessions=snap.docs.map(d=>({id:d.id,...d.data()}));
+
+  // Busca a meta diária
+  try{
+    const metaSnap=await getDoc(doc(db,`users/${cu.uid}/data`,'meta'));
+    if(metaSnap.exists()){
+      const horas=metaSnap.data().horas||4;
+      dailyMeta=horas*3600;// converte pra segundos
+    }
+  }catch(e){}
+
+  renderToday();
+  updateDisplay();// re-renderiza a barra com meta correta
+}
+
+function renderToday(){
+  const sessions=window._todaySessions||[];
+  const el=document.getElementById('sessions-today');
+  if(!sessions.length){el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:1.5rem;">Nenhuma sessão hoje ainda.</div>';return;}
+  el.innerHTML=sessions.map(s=>{
+    const sub=subjects.find(x=>x.id===s.subjectId);
+    const h=Math.floor(s.duration/3600),m=Math.floor((s.duration%3600)/60),sc=s.duration%60;
+    const d=s.startedAt.toDate?s.startedAt.toDate():new Date(s.startedAt);
+    return`<div class="session-row">
+      <div style="width:9px;height:9px;border-radius:50%;background:${sub?.color||'#6b8cae'};flex-shrink:0;"></div>
+      <span style="flex:1;font-size:13px;">${sub?.name||'Sem matéria'}</span>
+      <span style="font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;">${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}</span>
+      <span style="font-size:11px;color:var(--muted);margin-left:8px;">${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
+      <button onclick="deleteSession('${s.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 8px;margin-left:4px;border-radius:6px;transition:all .15s;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function updateDisplay(){
+  const ring=document.getElementById('ring');
+  const sub=subjects.find(x=>x.id===document.getElementById('subject-select').value);
+  if(pomMode){
+    const left=pomLeft;
+    const h=Math.floor(left/3600),m=Math.floor((left%3600)/60),s=left%60;
+    const ts=h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    document.getElementById('timer-time').textContent=ts;
+    document.getElementById('focus-time').textContent=ts;
+    const phasePct=pomTotal>0?(pomTotal-pomLeft)/pomTotal:0;
+    const phaseColors={'work':'#C69A3A','short':'#C69A3A','long':'#F59E0B'};
+    const phaseLabels={'work':'Foco — concentre-se!','short':'Pausa curta','long':'Pausa longa — descanse bem'};
+    const col=phaseColors[pomPhase]||'#C69A3A';
+    ring.style.strokeDasharray=C;ring.style.strokeDashoffset=C-phasePct*C;ring.style.stroke=col;
+    document.getElementById('timer-sub').textContent=phaseLabels[pomPhase]||'';
+    document.getElementById('focus-subject').textContent=sub?sub.name:'';
+    document.getElementById('focus-time').style.textShadow=`0 0 60px ${col}66, 0 0 120px ${col}22`;
+    renderPomDots();
+  }else{
+    const e=getElapsed();
+    const h=Math.floor(e/3600),m=Math.floor((e%3600)/60),s=e%60;
+    const ts=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    document.getElementById('timer-time').textContent=ts;
+    document.getElementById('focus-time').textContent=ts;
+
+    // ─ Nova lógica: progressão baseada na META DIÁRIA ─
+    const todaySessions=window._todaySessions||[];
+    const totalTodaySecs=todaySessions.reduce((sum,s)=>sum+(s.duration||0),0);
+    const progressPct=dailyMeta>0?Math.min(totalTodaySecs/dailyMeta,2):0;// permite até 200% (extra)
+
+    // Renderiza a barra com cores por matéria
+    renderProgressRing(progressPct,todaySessions);
+
+    // Se passou da meta, muda cor da sombra
+    const currentColor=progressPct>=1?(progressPct>=1.5?'#F59E0B':'#7C3AED'):sub?.color||'#C69A3A';
+    document.getElementById('focus-subject').textContent=sub?sub.name:'';
+    document.getElementById('focus-time').style.textShadow=`0 0 60px ${currentColor}66, 0 0 120px ${currentColor}22`;
+  }
+}
+
+function renderProgressRing(progressPct,todaySessions){
+  const layerGroup=document.getElementById('ring-layers');
+  layerGroup.innerHTML='';
+
+  if(progressPct===0){
+    // Sem progresso, deixa vazio
+    return;
+  }
+
+  // Agrupa sessões por matéria
+  const bySubject={};
+  todaySessions.forEach(s=>{
+    const subId=s.subjectId||'none';
+    if(!bySubject[subId])bySubject[subId]={duration:0,subject:null};
+    bySubject[subId].duration+=s.duration||0;
+  });
+
+  // Encontra cores das matérias
+  Object.keys(bySubject).forEach(subId=>{
+    if(subId!=='none'){
+      const sub=subjects.find(x=>x.id===subId);
+      bySubject[subId].subject=sub;
+    }
+  });
+
+  // Calcula o offset de cada matéria na barra
+  let currentOffset=0;
+  Object.keys(bySubject).forEach(subId=>{
+    const item=bySubject[subId];
+    const itemPct=Math.min(item.duration/dailyMeta,progressPct-currentOffset);
+    if(itemPct>0){
+      const color=item.subject?.color||'#6B8CAE';
+      const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      circle.setAttribute('cx','140');
+      circle.setAttribute('cy','140');
+      circle.setAttribute('r','126');
+      circle.setAttribute('class','ring-fill-layer');
+      circle.setAttribute('stroke',color);
+      circle.style.strokeDasharray=C;
+      circle.style.strokeDashoffset=C-itemPct*C;
+      layerGroup.appendChild(circle);
+      currentOffset+=itemPct;
+    }
+  });
+}
+
+// Quando app volta do background, recalcula o tempo correto imediatamente
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden && running && startTime){
+    updateDisplay();
+    document.title=`▶ ${document.getElementById('timer-time').textContent} — Focadus`;
+  } else if(document.hidden){
+    document.title='Focadus — Cronômetro';
+  }
+});
+
+window.toggleTimer=()=>{
+  if(!running){
+    const sid=document.getElementById('subject-select').value;if(!sid){showToast('Selecione uma matéria!');return;}
+    running=true;
+    document.getElementById('btn-play').classList.add('running');
+    document.getElementById('play-icon').innerHTML='<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    if(pomMode){
+      if(pomLeft<=0){pomPhase='work';pomLeft=pomWorkSecs();pomTotal=pomLeft;pomCyclesDone=0;renderPomDots();}
+      document.getElementById('timer-sub').textContent='Foco — concentre-se!';
+      ivl=setInterval(pomTick,1000);
+    }else{
+      startTime=new Date(Date.now()-baseElapsed*1000);
+      document.getElementById('timer-sub').textContent='Estudando...';
+      ivl=setInterval(()=>{updateDisplay();saveTimerState();document.title=`▶ ${document.getElementById('timer-time').textContent} — Focadus`;},1000);
+      saveTimerState();
+      syncTimerToFirestore();
+    }
+    updateDisplay();
+  }else{
+    if(!pomMode){baseElapsed=getElapsed();startTime=null;}
+    running=false;clearInterval(ivl);ivl=null;clearTimeout(pomAutoTimer);
+    if(!pomMode){saveTimerState();syncTimerToFirestore();}
+    document.getElementById('btn-play').classList.remove('running');
+    document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';
+    document.getElementById('timer-sub').textContent='Pausado';
+    document.title='Focadus — Cronômetro';
+  }
+};
+window.resetTimer=()=>{
+  if(running){running=false;clearInterval(ivl);ivl=null;}
+  clearTimeout(pomAutoTimer);
+  baseElapsed=0;startTime=null;
+  pomPhase='work';pomLeft=0;pomTotal=0;pomCyclesDone=0;
+  localStorage.removeItem('bz-timer');
+  if(cu){import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js").then(({deleteDoc,doc:fdoc})=>deleteDoc(fdoc(db,`users/${cu.uid}/data`,'timerState')).catch(()=>{}));}
+  document.getElementById('btn-play').classList.remove('running');
+  document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';
+  document.title='Focadus — Cronômetro';
+  const initT=pomMode?`${String(parseInt(document.getElementById('pom-work').value)||25).padStart(2,'0')}:00`:'00:00:00';
+  document.getElementById('timer-time').textContent=initT;
+  document.getElementById('focus-time').textContent=initT;
+  document.getElementById('timer-sub').textContent='Pronto para estudar';
+  const ring=document.getElementById('ring');ring.style.strokeDashoffset=C;ring.style.stroke=pomMode?'#C69A3A':'#C69A3A';
+  document.getElementById('ring-layers').innerHTML='';// limpa os arcos de progresso
+  if(pomMode)renderPomDots();
+};
+window.saveSession=async()=>{
+  const e=getElapsed();
+  console.log('[saveSession] elapsed='+e+' startTime='+startTime+' baseElapsed='+baseElapsed+' running='+running);
+  if(e<5){showToast('Estude pelo menos 5 segundos!');return;}
+  if(!startTime&&baseElapsed===0){console.log('[saveSession] Blocked: no startTime and no baseElapsed');return;}
+  const sid=document.getElementById('subject-select').value;
+  const sessionStart=startTime||new Date(Date.now()-e*1000);
+  if(running){running=false;clearInterval(ivl);document.getElementById('btn-play').classList.remove('running');document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';}
+  try{
+    await addDoc(collection(db,`users/${cu.uid}/sessions`),{subjectId:sid||null,duration:e,startedAt:Timestamp.fromDate(sessionStart),savedAt:Timestamp.now()});
+    localStorage.removeItem('bz-timer');
+    showToast('Sessão salva!');
+    baseElapsed=0;startTime=null;
+    resetTimer();
+    await loadToday();
+  }catch(err){
+    console.error('[saveSession error]',err);
+    showToast('Erro ao salvar sessão');
+  }
+};
+
+window.deleteSession=async(id)=>{
+  const{deleteDoc,doc:fdoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+  await deleteDoc(fdoc(db,`users/${cu.uid}/sessions`,id));
+  window._todaySessions=(window._todaySessions||[]).filter(s=>s.id!==id);
+  renderToday();
+  showToast('Sessão removida');
+};
+
+window.toggleFocus=()=>{document.getElementById('focus-overlay').classList.toggle('active');};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('focus-overlay').classList.remove('active');});
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+window.openProfileModal=()=>{const name=document.getElementById('user-name-el').textContent;document.getElementById('profile-name-inp').value=name;const big=document.getElementById('profile-avatar-big');const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);big.innerHTML=window._profilePhoto?`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:28px;font-weight:700;">${initials}</span>`;document.getElementById('modal-profile').classList.add('open');};
+window.closeProfileModal=()=>document.getElementById('modal-profile').classList.remove('open');
+let _deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_deferredPrompt=e;const b=document.getElementById('install-btn');if(b)b.style.display='flex';});
+window.addEventListener('appinstalled',()=>{const b=document.getElementById('install-btn');if(b)b.style.display='none';_deferredPrompt=null;});
+window.installPWA=async()=>{if(!_deferredPrompt)return;_deferredPrompt.prompt();const{outcome}=await _deferredPrompt.userChoice;if(outcome==='accepted')_deferredPrompt=null;};
+window.handlePhoto=(input)=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=200;const r=Math.min(max/img.width,max/img.height,1);canvas.width=Math.round(img.width*r);canvas.height=Math.round(img.height*r);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);window._profilePhoto=canvas.toDataURL('image/jpeg',.75);document.getElementById('profile-avatar-big').innerHTML=`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;setAvatar(document.getElementById('user-name-el').textContent,window._profilePhoto);};img.src=e.target.result;};reader.readAsDataURL(file);};
+window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null});setAvatar(name,window._profilePhoto);}catch(e){console.error('saveProfile',e);}closeProfileModal();};
+
+window.doLogout=async()=>{
+  closeProfileModal();
+  const{signOut}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+  await signOut(auth);
+  window.location.href='https://focadus.com.br/';
+};
+
+window.resetData=async()=>{
+  closeProfileModal();
+  bzConfirm('Resetar todos os dados','Isso apagará TODAS as sessões e matérias permanentemente. Esta ação não pode ser desfeita.','danger',()=>{
+    bzPrompt('Confirmação','Digite CONFIRMAR para prosseguir.','CONFIRMAR','CONFIRMAR',async()=>{
+      const{collection,getDocs,deleteDoc,doc:fdoc,setDoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+      const snap=await getDocs(collection(db,`users/${cu.uid}/sessions`));
+      await Promise.all(snap.docs.map(d=>deleteDoc(fdoc(db,`users/${cu.uid}/sessions`,d.id))));
+      await setDoc(fdoc(db,`users/${cu.uid}/data`,'subjects'),{list:[]});
+      await setDoc(fdoc(db,`users/${cu.uid}/data`,'meta'),{horas:0});
+      await setDoc(fdoc(db,`users/${cu.uid}/data`,'provas'),{list:[]});
+      bzAlert('Dados resetados','Todos os dados foram removidos com sucesso.','green');
+      setTimeout(()=>window.location.reload(),1800);
+    });
+  });
+};
+
+window.deleteAccount=async()=>{
+  closeProfileModal();
+  bzConfirm('Excluir conta permanentemente','Apagará TODOS os dados permanentemente. Esta ação não pode ser desfeita.','danger',()=>{
+    bzPrompt('Confirmação final','Digite EXCLUIR para confirmar.','EXCLUIR','EXCLUIR',async()=>{
+      try{
+        const{collection,getDocs,deleteDoc,doc:fdoc,writeBatch}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+        const uid=cu.uid;
+        const batch=writeBatch(db);
+        // 1. Deleta todas as subcoleções
+        const subCollections=['sessions','exams','cronograma','notes'];
+        for(const subColl of subCollections){
+          const snap=await getDocs(collection(db,`users/${uid}/${subColl}`));
+          snap.docs.forEach(d=>batch.delete(d.ref));
+        }
+        // 2. Deleta documentos em /users/{uid}/data (profile, fcmToken, etc)
+        const dataSnap=await getDocs(collection(db,`users/${uid}/data`));
+        dataSnap.docs.forEach(d=>batch.delete(d.ref));
+        // 3. Deleta o documento raiz /users/{uid}
+        batch.delete(fdoc(db,`users/${uid}`));
+        // 4. Aplica todos os deletes
+        await batch.commit();
+        // 5. Deleta a conta do Firebase
+        await cu.delete();
+        window.location.href='https://focadus.com.br/';
+      }catch(e){
+        if(e.code==='auth/requires-recent-login'){
+          bzAlert('Reautenticação necessária','Por segurança, faça login novamente antes de excluir sua conta.','warn');
+          const{signOut}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+          await signOut(auth);window.location.href='https://focadus.com.br/';
+        }else{bzAlert('Erro',e.message,'danger');}
+      }
+    });
+  });
+};
+</script>
+</body>
+</html>
+
+
+
+
