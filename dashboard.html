@@ -345,7 +345,7 @@ function showPaywall(){
     <h1>Acesso Premium</h1>
     <p>Seu período de avaliação gratuita expirou.<br>Adquira o acesso vitalício por apenas <strong style="color:#C69A3A">R$29</strong> e continue estudando sem limites.</p>
     <a class="pw-btn" href="https://pay.kiwify.com.br/cZGAGEi" target="_blank">Desbloquear Agora — R$29</a><br>
-    <button class="pw-logout" onclick="import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js').then(m=>m.getAuth()).then(a=>m.signOut(a)).finally(()=>{window.location.href='https://focadus.com.br/';})">Sair da conta</button>
+    <button class="pw-logout" onclick="import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js').then(m=>m.signOut(m.getAuth())).finally(()=>{window.location.href='https://focadus.com.br/';})">Sair da conta</button>
   </div>`;
 }
 
@@ -522,7 +522,7 @@ function localStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart
 
 function computeMetrics(animate=false){
   const ts=localStr(now());
-  const wa=now();wa.setDate(wa.getDate()-6);
+  const wa=now();wa.setDate(wa.getDate()-6);wa.setHours(0,0,0,0);
   let td=0,wk=0,tot=0;
   const sd=new Set();
   sessions.forEach(s=>{
@@ -587,7 +587,7 @@ function computeMetrics(animate=false){
 
 function buildTodayPanel(){
   const ts=localStr(now());
-  const todaySessions=sessions.filter(s=>s.startedAt&&localStr(gD(s))===ts);
+  const todaySessions=sessions.filter(s=>s.startedAt&&(s.duration||0)>0&&localStr(gD(s))===ts);
   document.getElementById('today-sessions-count').textContent=todaySessions.length;
   const el=document.getElementById('today-timeline');
   if(!todaySessions.length){
@@ -598,7 +598,7 @@ function buildTodayPanel(){
   el.innerHTML=todaySessions.map(s=>{
     const sub=subjects.find(x=>x.id===s.subjectId);
     const color=sub?.color||'#C69A3A';
-    const h=Math.floor(s.duration/3600),m=Math.floor((s.duration%3600)/60),sc=s.duration%60;
+    const dur=s.duration||0;const h=Math.floor(dur/3600),m=Math.floor((dur%3600)/60),sc=dur%60;
     const d=gD(s);
     const pct=Math.round((s.duration/maxSec)*100);
     return`<div class="tl-item">
@@ -667,7 +667,7 @@ window.saveNotes=async function(auto=false){
     setTimeout(()=>{if(st.textContent==='Salvo'){st.textContent='';st.className='notes-save-status';}},2000);
     renderSubjects();
   }catch(e){
-    st.textContent='Erro ao salvar';st.className='notes-save-status';
+    st.textContent='Erro ao salvar: '+(e.code||e.message||'');st.className='notes-save-status';
   }
 };
 
@@ -693,13 +693,18 @@ window.calNav=(dir)=>{calM+=dir;if(calM>11){calM=0;calY++;}if(calM<0){calM=11;ca
 window.deleteSubject=async(i)=>{
   const sub=subjects[i];
   bzConfirm(`Excluir "${sub.name}"?`,'Todas as sessões e notas desta matéria serão apagadas permanentemente.','warn',async()=>{
-    const q2=query(collection(db,`users/${cu.uid}/sessions`),where('subjectId','==',sub.id));
-    const snap=await getDocs(q2);
-    await Promise.all(snap.docs.map(d=>deleteDoc(doc(db,`users/${cu.uid}/sessions`,d.id))));
-    subjects.splice(i,1);
-    await setDoc(doc(db,`users/${cu.uid}/data`,'subjects'),{list:subjects});
-    if(notes[sub.id]){delete notes[sub.id];await setDoc(doc(db,`users/${cu.uid}/data`,'notes'),{map:notes});}
-    renderSubjects();
+    try{
+      const q2=query(collection(db,`users/${cu.uid}/sessions`),where('subjectId','==',sub.id));
+      const snap=await getDocs(q2);
+      await Promise.all(snap.docs.map(d=>deleteDoc(doc(db,`users/${cu.uid}/sessions`,d.id))));
+      const novos=subjects.filter(x=>x.id!==sub.id);
+      await setDoc(doc(db,`users/${cu.uid}/data`,'subjects'),{list:novos});
+      subjects=novos;
+      if(notes[sub.id]){delete notes[sub.id];await setDoc(doc(db,`users/${cu.uid}/data`,'notes'),{map:notes});}
+      renderSubjects();
+    }catch(e){
+      bzAlert('Erro ao excluir matéria',e.code||e.message||'desconhecido','danger');
+    }
   });
 };
 
@@ -731,9 +736,15 @@ window.openMateriaModal=()=>{document.getElementById('modal-materia').classList.
 window.closeMateria=()=>{document.getElementById('modal-materia').classList.remove('open');document.getElementById('subject-input').value='';};
 window.addSubject=async()=>{
   const n=document.getElementById('subject-input').value.trim();if(!n)return;
-  subjects.push({id:Date.now().toString(),name:n,color:selColor});
-  await setDoc(doc(db,`users/${cu.uid}/data`,'subjects'),{list:subjects});
-  renderSubjects();closeMateria();
+  const novo={id:Date.now().toString(),name:n,color:selColor};
+  subjects.push(novo);
+  try{
+    await setDoc(doc(db,`users/${cu.uid}/data`,'subjects'),{list:subjects});
+    renderSubjects();closeMateria();
+  }catch(e){
+    subjects.pop();
+    bzAlert('Erro ao salvar matéria',e.code||e.message||'desconhecido','danger');
+  }
 };
 
 
@@ -750,7 +761,7 @@ window.openProfileModal=()=>{
 };
 window.closeProfileModal=()=>document.getElementById('modal-profile').classList.remove('open');
 window.handlePhoto=(input)=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=200;const r=Math.min(max/img.width,max/img.height,1);canvas.width=Math.round(img.width*r);canvas.height=Math.round(img.height*r);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);window._profilePhoto=canvas.toDataURL('image/jpeg',.75);document.getElementById('profile-avatar-big').innerHTML=`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;setAvatar(document.getElementById('user-name-el').textContent,window._profilePhoto);};img.src=e.target.result;};reader.readAsDataURL(file);};
-window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;const rt=document.getElementById('profile-reminder-inp').value||'20:00';const[rh,rm]=rt.split(':').map(Number);reminderHour=rh;reminderMin=rm||0;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null,reminderTime:rt});setAvatar(name,window._profilePhoto);const h=now().getHours();const el=document.getElementById('greeting');if(el)el.textContent=`${h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'}, ${name.split(' ')[0]}!`;}catch(e){console.error('saveProfile',e);}await requestNotifPermission();schedule20hNotification();closeProfileModal();};
+window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;const rt=document.getElementById('profile-reminder-inp').value||'20:00';const[rh,rm]=rt.split(':').map(Number);reminderHour=rh;reminderMin=rm||0;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null,reminderTime:rt});setAvatar(name,window._profilePhoto);const h=now().getHours();const el=document.getElementById('greeting');if(el)el.textContent=`${h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'}, ${name.split(' ')[0]}!`;await requestNotifPermission();schedule20hNotification();closeProfileModal();}catch(e){bzAlert('Erro ao salvar perfil',e.code||e.message||'desconhecido','danger');}};
 window.logout=async()=>{await signOut(auth);window.location.href='https://focadus.com.br/';};
 
 // PWA Install
@@ -897,6 +908,7 @@ window.exportPDF=function(){
   </body></html>`;
 
   const w=window.open('','_blank');
+  if(!w){bzAlert('Não foi possível abrir o relatório','Permita pop-ups para este site e tente novamente.','warn');return;}
   w.document.write(html);
   w.document.close();
   setTimeout(()=>w.print(),400);

@@ -84,8 +84,8 @@
 .bf-cancel:hover{border-color:var(--muted);color:var(--text);}
 
 /* Responsive */
-@media(max-width:1100px){.board{grid-template-columns:repeat(4,1fr);}.day-col:nth-child(n+5){display:none;}}
-@media(max-width:700px){.board{grid-template-columns:repeat(3,1fr);}.day-col:nth-child(n+4){display:none;}.crono-summary{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:1100px){.board{grid-template-columns:repeat(4,1fr);}}
+@media(max-width:700px){.board{grid-template-columns:repeat(3,1fr);}.crono-summary{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:600px){
   /* Scroll horizontal — mostra toda a semana */
   .board{
@@ -263,30 +263,36 @@ async function loadWeek(){
   const fmt=d=>d.toLocaleDateString('pt-BR',{day:'numeric',month:'short'});
   document.getElementById('week-label').textContent=`${fmt(wdays[0])} – ${fmt(wdays[6])}`;
 
-  // Plano fixo — sempre carrega o template (mesmo para todas as semanas)
-  const planSnap=await getDoc(doc(db,`users/${cu.uid}/cronograma`,'template'));
-  const stored=planSnap.exists()?planSnap.data():{};
-  for(let i=0;i<7;i++){
-    daysData[i]=(stored.days&&stored.days[String(i)])||[];
+  try{
+    // Plano fixo — sempre carrega o template (mesmo para todas as semanas)
+    const planSnap=await getDoc(doc(db,`users/${cu.uid}/cronograma`,'template'));
+    const stored=planSnap.exists()?planSnap.data():{};
+    for(let i=0;i<7;i++){
+      daysData[i]=(stored.days&&stored.days[String(i)])||[];
+    }
+
+    // Sessões reais da semana navegada (para mostrar progresso)
+    const start=new Date(wdays[0]);
+    const end=new Date(wdays[6]);end.setHours(23,59,59,999);
+    const q=query(collection(db,`users/${cu.uid}/sessions`),where('startedAt','>=',Timestamp.fromDate(start)),where('startedAt','<=',Timestamp.fromDate(end)));
+    const snap=await getDocs(q);
+    actualData={};
+    snap.docs.forEach(d=>{
+      const s=d.data();
+      if(!s.subjectId||!s.duration)return;
+      const sDate=s.startedAt.toDate?s.startedAt.toDate():new Date(s.startedAt);
+      const dow=sDate.getDay();
+      const dayIdx=dow===0?6:dow-1;
+      const k=s.subjectId+'_'+dayIdx;
+      actualData[k]=(actualData[k]||0)+s.duration;
+    });
+
+    renderBoard();
+  }catch(e){
+    console.error('loadWeek',e);
+    const board=document.getElementById('board');
+    if(board)board.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:2.5rem 1rem;color:var(--muted);">Erro ao carregar cronograma: ${esc(e.code||e.message||'desconhecido')}<br><button class="wnav-today" style="margin-top:12px;" onclick="reloadWeek()">Recarregar</button></div>`;
   }
-
-  // Sessões reais da semana navegada (para mostrar progresso)
-  const start=new Date(wdays[0]);
-  const end=new Date(wdays[6]);end.setHours(23,59,59,999);
-  const q=query(collection(db,`users/${cu.uid}/sessions`),where('startedAt','>=',Timestamp.fromDate(start)),where('startedAt','<=',Timestamp.fromDate(end)));
-  const snap=await getDocs(q);
-  actualData={};
-  snap.docs.forEach(d=>{
-    const s=d.data();
-    if(!s.subjectId||!s.duration)return;
-    const sDate=s.startedAt.toDate?s.startedAt.toDate():new Date(s.startedAt);
-    const dow=sDate.getDay();
-    const dayIdx=dow===0?6:dow-1;
-    const k=s.subjectId+'_'+dayIdx;
-    actualData[k]=(actualData[k]||0)+s.duration;
-  });
-
-  renderBoard();
 }
 
 let saveTimer=null;
@@ -296,7 +302,7 @@ function save(){
     // Sempre salva no template fixo
     const days={};
     for(let i=0;i<7;i++) days[String(i)]=daysData[i];
-    await setDoc(doc(db,`users/${cu.uid}/cronograma`,'template'),{days});
+    try{await setDoc(doc(db,`users/${cu.uid}/cronograma`,'template'),{days});}catch(e){console.error('save cronograma',e);bzAlert('Erro ao salvar','Não foi possível salvar o cronograma: '+(e.code||e.message||'desconhecido'),'danger');}
   },700);
 }
 
@@ -325,7 +331,7 @@ function renderBoard(){
     const blocksHtml=blocks.map((bl,bi)=>{
       const sub=subjects.find(x=>x.id===bl.subjectId)||{name:bl.name||'?',color:'#C69A3A'};
       const actSecs=getActual(bl.subjectId,i);
-      const bg=sub.color+'1a';
+      const bg=esc(sub.color)+'1a';
       return `<div class="block-item" style="background:${bg}" onclick="openEditBlock(${i},${bi},event)">
         <div class="block-color-bar" style="background:${esc(sub.color)}"></div>
         <div class="block-name" title="${esc(sub.name)}">${esc(sub.name)}</div>
@@ -448,6 +454,7 @@ window.confirmBlock=function(dayIdx,blockIdx){
   const hrsInp=document.getElementById(`bfh-${dayIdx}`);
   const hrs=parseFloat(hrsInp?hrsInp.value:0)||0;
   const mins=Math.round(hrs*60);
+  if(mins<=0){if(hrsInp){hrsInp.style.borderColor='var(--red)';hrsInp.focus();}return;}
   const isEdit=blockIdx!==null&&blockIdx!==undefined;
   if(isEdit){
     daysData[dayIdx][blockIdx]={...daysData[dayIdx][blockIdx],subjectId:sid,mins};
@@ -470,6 +477,7 @@ document.addEventListener('click',e=>{
 
 window.navWeek=function(dir){weekOffset+=dir;closeForm();loadWeek();};
 window.goToday=function(){weekOffset=0;closeForm();loadWeek();};
+window.reloadWeek=function(){loadWeek();};
 
 window.openProfileModal=()=>{
   const name=document.getElementById('user-name-el').textContent;
@@ -485,7 +493,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_deferredPr
 window.addEventListener('appinstalled',()=>{const b=document.getElementById('install-btn');if(b)b.style.display='none';_deferredPrompt=null;});
 window.installPWA=async()=>{if(!_deferredPrompt)return;_deferredPrompt.prompt();const{outcome}=await _deferredPrompt.userChoice;if(outcome==='accepted')_deferredPrompt=null;};
 window.handlePhoto=(input)=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=200;const r=Math.min(max/img.width,max/img.height,1);canvas.width=Math.round(img.width*r);canvas.height=Math.round(img.height*r);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);window._profilePhoto=canvas.toDataURL('image/jpeg',.75);document.getElementById('profile-avatar-big').innerHTML=`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;setAvatar(document.getElementById('user-name-el').textContent,window._profilePhoto);};img.src=e.target.result;};reader.readAsDataURL(file);};
-window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null});setAvatar(name,window._profilePhoto);}catch(e){console.error(e);}closeProfileModal();};
+window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null});setAvatar(name,window._profilePhoto);closeProfileModal();}catch(e){console.error(e);bzAlert('Erro','Não foi possível salvar o perfil: '+(e.code||e.message||'desconhecido'),'danger');}};
 window.doLogout=async()=>{closeProfileModal();const{signOut}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");await signOut(auth);window.location.href='https://focadus.com.br/';};
 window.resetData=async()=>{
   closeProfileModal();

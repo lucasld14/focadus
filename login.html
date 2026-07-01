@@ -433,6 +433,8 @@ window.loginEmail = async () => {
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-password').value;
   if (!email || !pass) return showError('Preencha e-mail e senha.');
+  const btn = document.querySelector('#form-login .btn-primary');
+  if (btn) { if (btn.disabled) return; btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Entrando...'; }
   try {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     if (!cred.user.emailVerified) {
@@ -452,6 +454,8 @@ window.loginEmail = async () => {
       showError('E-mail ou senha incorretos. Verifique e tente novamente.');
       document.getElementById('forgot-link').style.display='block';
     }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.label || 'Entrar'; }
   }
 };
 
@@ -464,6 +468,8 @@ window.registerEmail = async () => {
   const pass = document.getElementById('reg-password').value;
   if (!name || !email || !pass) return showError('Preencha todos os campos.');
   if (pass.length < 6) return showError('Senha deve ter pelo menos 6 caracteres.');
+  const btn = document.querySelector('#reg-fields .btn-primary');
+  if (btn) { if (btn.disabled) return; btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Criando conta...'; }
   try {
     isRegistering = true;
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
@@ -480,7 +486,12 @@ window.registerEmail = async () => {
     isRegistering = false;
     if (e.code === 'auth/email-already-in-use') showError('Já existe uma conta com esse e-mail. Faça login na aba "Entrar".');
     else if (e.code === 'auth/invalid-email') showError('E-mail inválido. Verifique e tente novamente.');
-    else showError('Erro ao criar conta. Tente novamente.');
+    else if (e.code === 'auth/network-request-failed') showError('Sem conexão. Verifique sua internet e tente novamente.');
+    else if (e.code === 'auth/too-many-requests') showError('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
+    else if (e.code === 'auth/weak-password') showError('Senha muito fraca. Use pelo menos 6 caracteres.');
+    else showError('Erro ao criar conta. ('+(e.code||'')+')');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.label || 'Criar conta'; }
   }
 };
 
@@ -516,6 +527,7 @@ window.forgotPassword = async (e) => {
   const email = document.getElementById('login-email').value.trim();
   if (!email) return showError('Digite seu e-mail no campo acima e clique novamente.');
 
+  document.getElementById('forgot-link').style.display='block';
   const btn = document.getElementById('btn-reset');
   const icon = document.getElementById('reset-icon');
   const text = document.getElementById('reset-text');
@@ -563,14 +575,28 @@ window.forgotPassword = async (e) => {
     icon.innerHTML = SVG_EMAIL;
     text.textContent = 'Reenviar link de redefinição';
     if(err.code==='auth/user-not-found') showError('Nenhuma conta encontrada com esse e-mail.');
-    else showError('Erro ao enviar. Verifique o e-mail digitado.');
+    else if(err.code==='auth/too-many-requests') showError('Muitas solicitações. Aguarde alguns minutos e tente novamente.');
+    else if(err.code==='auth/network-request-failed') showError('Sem conexão. Verifique sua internet e tente novamente.');
+    else if(err.code==='auth/invalid-email') showError('E-mail inválido. Verifique o e-mail digitado.');
+    else showError('Erro ao enviar o link. ('+(err.code||'')+')');
   }
 };
 
 window.loginGoogle = async () => {
   hideError();
+  const btn = document.querySelector('.btn-google');
+  if (btn) { if (btn.disabled) return; btn.disabled = true; btn.style.opacity = '.6'; }
   try { await signInWithPopup(auth, provider); }
-  catch(e) { showError('Erro ao entrar com Google.'); }
+  catch(e) {
+    const code = e.code || '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+    else if (code === 'auth/popup-blocked') showError('Seu navegador bloqueou o popup do Google. Libere popups e tente novamente.');
+    else if (code === 'auth/network-request-failed') showError('Sem conexão. Verifique sua internet e tente novamente.');
+    else if (code === 'auth/account-exists-with-different-credential') showError('Já existe uma conta com esse e-mail. Entre com e-mail e senha.');
+    else showError('Erro ao entrar com Google. ('+code+')');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+  }
 };
 </script>
 </body>

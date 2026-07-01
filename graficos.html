@@ -164,7 +164,8 @@ import{getFirestore,doc,getDoc,setDoc,collection,query,orderBy,onSnapshot,where,
 const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
 let cu,subjects=[],sessions=[],stackChart,pieChart,weekChart,stackMode='week',pieMode='week';
-const now=new Date();
+let now=new Date();
+const localDay=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const DIAS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -242,6 +243,7 @@ onAuthStateChanged(auth,async user=>{
   // Tempo real
   const q=query(collection(db,`users/${cu.uid}/sessions`),orderBy('startedAt','desc'));
   onSnapshot(q,snap=>{
+    now=new Date();
     sessions=snap.docs.map(d=>({id:d.id,...d.data()}));
     buildWeeklyChart();
     buildStack(stackMode);
@@ -252,7 +254,7 @@ onAuthStateChanged(auth,async user=>{
 });
 
 function setAvatar(name,photo){
-  const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+  const initials=name.trim().split(/\s+/).filter(Boolean).map(n=>n[0]).join('').toUpperCase().slice(0,2);
   const av=document.getElementById('avatar-el');
   if(photo)av.innerHTML=`<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
   else av.textContent=initials;
@@ -266,7 +268,7 @@ function filterSessions(mode){
   return sessions.filter(s=>{
     if(!s.startedAt)return false;
     const d=gD(s);
-    if(mode==='week'){const w=new Date(now);w.setDate(w.getDate()-6);return d>=w;}
+    if(mode==='week'){const w=new Date(now);w.setHours(0,0,0,0);w.setDate(w.getDate()-6);return d>=w;}
     if(mode==='month')return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
     return true;
   });
@@ -274,7 +276,7 @@ function filterSessions(mode){
 
 function buildStack(mode){
   let labels=[],dateMap=[];
-  if(mode==='week'){for(let i=6;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);labels.push(DIAS[d.getDay()]);dateMap.push({type:'day',ds:d.toISOString().split('T')[0]});}}
+  if(mode==='week'){for(let i=6;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);labels.push(DIAS[d.getDay()]);dateMap.push({type:'day',ds:localDay(d)});}}
   else if(mode==='month'){const days=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();for(let i=1;i<=days;i++){labels.push(i);dateMap.push({type:'day',ds:`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`});}}
   else{MESES.forEach((m,i)=>{labels.push(m);dateMap.push({type:'month',month:i});});}
 
@@ -283,7 +285,7 @@ function buildStack(mode){
       const filtered=sessions.filter(s=>{
         if(!s.startedAt||s.subjectId!==sub.id)return false;
         const d=gD(s);
-        if(dm.type==='day')return d.toISOString().split('T')[0]===dm.ds;
+        if(dm.type==='day')return localDay(d)===dm.ds;
         return d.getMonth()===dm.month&&d.getFullYear()===now.getFullYear();
       });
       return parseFloat((filtered.reduce((a,s)=>a+(s.duration||0),0)/3600).toFixed(2));
@@ -324,10 +326,11 @@ function buildPie(mode){
 function buildStats(){
   if(!sessions.length){document.getElementById('stats-list').innerHTML='<div class="empty-state" style="height:120px"><div class="empty-text">Nenhuma sessão ainda.</div></div>';return;}
   const total=sessions.reduce((a,s)=>a+(s.duration||0),0);
-  const sd=new Set(sessions.filter(s=>s.startedAt).map(s=>gD(s).toISOString().split('T')[0]));
+  const sd=new Set(sessions.filter(s=>s.startedAt).map(s=>localDay(gD(s))));
   const avg=sd.size>0?total/sd.size:0;
   let streak=0;const ck=new Date(now);
-  while(true){const s=ck.toISOString().split('T')[0];if(sd.has(s)){streak++;ck.setDate(ck.getDate()-1);}else break;}
+  if(!sd.has(localDay(ck)))ck.setDate(ck.getDate()-1);
+  while(true){const s=localDay(ck);if(sd.has(s)){streak++;ck.setDate(ck.getDate()-1);}else break;}
   const stats=[
     {label:'Total acumulado',val:fmt(total)},
     {label:'Dias estudados',val:`${sd.size} dias`},
@@ -361,9 +364,9 @@ function buildWeeklyChart(){
   const labels=[],data=[];
   for(let i=6;i>=0;i--){
     const d=new Date(now);d.setDate(d.getDate()-i);
-    const ds=d.toISOString().split('T')[0];
+    const ds=localDay(d);
     labels.push(d.toLocaleDateString('pt-BR',{weekday:'short'}));
-    const sec=sessions.filter(s=>s.startedAt&&gD(s).toISOString().split('T')[0]===ds).reduce((a,s)=>a+(s.duration||0),0);
+    const sec=sessions.filter(s=>s.startedAt&&localDay(gD(s))===ds).reduce((a,s)=>a+(s.duration||0),0);
     data.push(+(sec/3600).toFixed(2));
   }
   const isDark=document.documentElement.getAttribute('data-theme')!=='light';
@@ -378,17 +381,17 @@ function buildWeeklyChart(){
   });
 }
 
-window.setStack=(mode,btn)=>{stackMode=mode;document.getElementById('stack-fg').querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');buildStack(mode);};
-window.setPie=(mode,btn)=>{pieMode=mode;document.getElementById('pie-fg').querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');buildPie(mode);};
+window.setStack=(mode,btn)=>{now=new Date();stackMode=mode;document.getElementById('stack-fg').querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');buildStack(mode);};
+window.setPie=(mode,btn)=>{now=new Date();pieMode=mode;document.getElementById('pie-fg').querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');buildPie(mode);};
 
-window.openProfileModal=()=>{const name=document.getElementById('user-name-el').textContent;document.getElementById('profile-name-inp').value=name;const big=document.getElementById('profile-avatar-big');const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);big.innerHTML=window._profilePhoto?`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:28px;font-weight:700;">${initials}</span>`;document.getElementById('modal-profile').classList.add('open');};
+window.openProfileModal=()=>{const name=document.getElementById('user-name-el').textContent;document.getElementById('profile-name-inp').value=name;const big=document.getElementById('profile-avatar-big');const initials=name.trim().split(/\s+/).filter(Boolean).map(n=>n[0]).join('').toUpperCase().slice(0,2);big.innerHTML=window._profilePhoto?`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:28px;font-weight:700;">${initials}</span>`;document.getElementById('modal-profile').classList.add('open');};
 window.closeProfileModal=()=>document.getElementById('modal-profile').classList.remove('open');
 let _deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_deferredPrompt=e;const b=document.getElementById('install-btn');if(b)b.style.display='flex';});
 window.addEventListener('appinstalled',()=>{const b=document.getElementById('install-btn');if(b)b.style.display='none';_deferredPrompt=null;});
 window.installPWA=async()=>{if(!_deferredPrompt)return;_deferredPrompt.prompt();const{outcome}=await _deferredPrompt.userChoice;if(outcome==='accepted')_deferredPrompt=null;};
 window.handlePhoto=(input)=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=200;const r=Math.min(max/img.width,max/img.height,1);canvas.width=Math.round(img.width*r);canvas.height=Math.round(img.height*r);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);window._profilePhoto=canvas.toDataURL('image/jpeg',.75);document.getElementById('profile-avatar-big').innerHTML=`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;setAvatar(document.getElementById('user-name-el').textContent,window._profilePhoto);};img.src=e.target.result;};reader.readAsDataURL(file);};
-window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null});setAvatar(name,window._profilePhoto);}catch(e){console.error('saveProfile',e);}closeProfileModal();};
+window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null});setAvatar(name,window._profilePhoto);closeProfileModal();}catch(e){console.error('saveProfile',e);bzAlert('Erro ao salvar perfil',(e.code||e.message||'Tente novamente'),'danger');}};
 
 window.doLogout=async()=>{
   closeProfileModal();
