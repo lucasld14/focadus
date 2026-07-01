@@ -102,6 +102,8 @@ body{
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
   position:relative;
+  overflow-x:hidden;
+  max-width:100%;
 }
 
 /* Textura ambiente — muito sutil */
@@ -567,7 +569,7 @@ body::before{
   .user-chip::after{content:'Perfil';font-size:10px;color:var(--muted);line-height:1;font-family:var(--font);}
   .nav-item{
     flex-direction:column;align-items:center;justify-content:center;
-    gap:3px;padding:6px 10px;min-width:52px;
+    gap:3px;padding:6px 10px;min-width:52px;min-height:44px;
     font-size:10px;border-radius:10px;
   }
   .nav-item span{display:block;font-size:10px;line-height:1;}
@@ -591,6 +593,31 @@ body::before{
   .streak-badge{font-size:11px;padding:5px 12px;}
   .page-sub{font-size:12px;}
   .modal-box{max-width:calc(100vw - 2rem);}
+
+  /* Alvo de toque mínimo (>=44px) no chip de perfil */
+  .user-chip{min-height:44px;}
+
+  /* Botões principais com altura confortável de toque */
+  .btn-primary,.btn-secondary{min-height:44px;}
+  .add-btn{min-height:36px;}
+  .install-btn,.theme-btn{min-height:36px;}
+
+  /* Evita zoom automático do iOS ao focar campos (>=16px) */
+  .modal-input,input,select,textarea{font-size:16px;}
+
+  /* Inputs/selects ocupam a largura disponível sem estourar */
+  input,select,textarea{max-width:100%;}
+
+  /* Tabelas e grades largas: scroll horizontal suave em vez de overflow */
+  table{display:block;width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
+  /* Charts/canvas nunca ultrapassam o container */
+  canvas,svg,img{max-width:100%;}
+  .chart-box{max-width:100%;}
+
+  /* Reforço anti-overflow horizontal em containers de página */
+  .main,.panel,.cards-grid,.topbar{max-width:100%;}
+  .panel{overflow-x:hidden;}
 }
 
 @media(max-width:480px){
@@ -605,8 +632,20 @@ body::before{
   .panel{padding:1rem;}
   .panel-header{margin-bottom:.75rem;flex-wrap:wrap;}
   .streak-badge{font-size:10px;padding:4px 10px;}
-  .filter-group{gap:2px;}
+  .filter-group{gap:2px;flex-wrap:wrap;}
   .filter-btn{padding:4px 10px;font-size:10.5px;}
+
+  /* Mantém 16px nos campos para evitar zoom do iOS mesmo em telas menores */
+  .modal-input,input,select,textarea{font-size:16px;}
+
+  /* Modal ocupa quase toda a largura sem encostar nas bordas */
+  .modal-box{max-width:calc(100vw - 1.5rem);}
+
+  /* Botões em coluna quando o espaço aperta, evitando estouro */
+  .modal-btns{flex-wrap:wrap;}
+
+  /* Garante que filhos diretos do main não criem scroll lateral */
+  .row-2,.row-2b{grid-template-columns:1fr !important;}
 }
 
 @media(max-width:360px){
@@ -614,8 +653,15 @@ body::before{
   .metric-card{padding:.8rem;}
   .metric-val{font-size:18px;}
   .main{padding:.75rem .6rem;padding-bottom:calc(5.5rem + env(safe-area-inset-bottom));}
-  .modal-box{padding:1rem;}
+  .modal-box{padding:1rem;max-width:calc(100vw - 1rem);}
   .topbar-right{width:100%;}
+
+  /* Microajustes finais anti-overflow em telas muito estreitas (320px) */
+  .page-title{font-size:18px;}
+  .panel-header{gap:6px;}
+  .nav-item{min-width:40px;padding:6px 4px;}
+  /* Mantém 16px nos campos mesmo em 320px (anti-zoom iOS) */
+  .modal-input,input,select,textarea{font-size:16px;}
 }
 
 /* ══════════════════════ PWA STANDALONE ══════════════════════ */

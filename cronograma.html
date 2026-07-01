@@ -487,6 +487,31 @@ window.installPWA=async()=>{if(!_deferredPrompt)return;_deferredPrompt.prompt();
 window.handlePhoto=(input)=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=200;const r=Math.min(max/img.width,max/img.height,1);canvas.width=Math.round(img.width*r);canvas.height=Math.round(img.height*r);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);window._profilePhoto=canvas.toDataURL('image/jpeg',.75);document.getElementById('profile-avatar-big').innerHTML=`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;setAvatar(document.getElementById('user-name-el').textContent,window._profilePhoto);};img.src=e.target.result;};reader.readAsDataURL(file);};
 window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null});setAvatar(name,window._profilePhoto);}catch(e){console.error(e);}closeProfileModal();};
 window.doLogout=async()=>{closeProfileModal();const{signOut}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");await signOut(auth);window.location.href='https://focadus.com.br/';};
+window.resetData=async()=>{
+  closeProfileModal();
+  if(!cu){alert('Aguarde o login carregar e tente novamente.');return;}
+  if(!confirm('⚠️ Resetar TODOS os dados?\n\nIsso apagará permanentemente: sessões, matérias, metas, cronograma e provas. Esta ação não pode ser desfeita.'))return;
+  const confirmText=prompt('Digite CONFIRMAR para prosseguir:','');
+  if(confirmText!=='CONFIRMAR'){alert('Cancelado.');return;}
+  try{
+    const{collection,getDocs,deleteDoc,doc:fdoc,setDoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const uid=cu.uid;
+    for(const sub of ['sessions','cronograma','notes']){
+      const snap=await getDocs(collection(db,`users/${uid}/${sub}`));
+      await Promise.all(snap.docs.map(d=>deleteDoc(d.ref)));
+    }
+    await setDoc(fdoc(db,`users/${uid}/data`,'subjects'),{list:[]});
+    await setDoc(fdoc(db,`users/${uid}/data`,'meta'),{horas:0});
+    await setDoc(fdoc(db,`users/${uid}/data`,'provas'),{list:[]});
+    await deleteDoc(fdoc(db,`users/${uid}/data`,'timerState')).catch(()=>{});
+    localStorage.removeItem('bz-timer');
+    alert('✅ Todos os dados foram resetados com sucesso!');
+    setTimeout(()=>window.location.reload(),800);
+  }catch(e){
+    console.error('resetData error',e);
+    alert('❌ Erro ao resetar: '+(e.code||e.message||'desconhecido'));
+  }
+};
 window.deleteAccount=async()=>{
   closeProfileModal();
   bzConfirm('Excluir conta permanentemente','Apagará TODOS os dados permanentemente. Esta ação não pode ser desfeita.','danger',()=>{

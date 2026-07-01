@@ -508,18 +508,28 @@ window.doLogout=async()=>{
 
 window.resetData=async()=>{
   closeProfileModal();
-  bzConfirm('Resetar todos os dados','Isso apagará TODAS as sessões e matérias permanentemente. Esta ação não pode ser desfeita.','danger',()=>{
-    bzPrompt('Confirmação','Digite CONFIRMAR para prosseguir.','CONFIRMAR','CONFIRMAR',async()=>{
-      const{collection,getDocs,deleteDoc,doc:fdoc,setDoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-      const snap=await getDocs(collection(db,`users/${cu.uid}/sessions`));
-      await Promise.all(snap.docs.map(d=>deleteDoc(fdoc(db,`users/${cu.uid}/sessions`,d.id))));
-      await setDoc(fdoc(db,`users/${cu.uid}/data`,'subjects'),{list:[]});
-      await setDoc(fdoc(db,`users/${cu.uid}/data`,'meta'),{horas:0});
-      await setDoc(fdoc(db,`users/${cu.uid}/data`,'provas'),{list:[]});
-      bzAlert('Dados resetados','Todos os dados foram removidos com sucesso.','green');
-      setTimeout(()=>window.location.reload(),1800);
-    });
-  });
+  if(!cu){alert('Aguarde o login carregar e tente novamente.');return;}
+  if(!confirm('⚠️ Resetar TODOS os dados?\n\nIsso apagará permanentemente: sessões, matérias, metas, cronograma e provas. Esta ação não pode ser desfeita.'))return;
+  const confirmText=prompt('Digite CONFIRMAR para prosseguir:','');
+  if(confirmText!=='CONFIRMAR'){alert('Cancelado.');return;}
+  try{
+    const{collection,getDocs,deleteDoc,doc:fdoc,setDoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const uid=cu.uid;
+    for(const sub of ['sessions','cronograma','notes']){
+      const snap=await getDocs(collection(db,`users/${uid}/${sub}`));
+      await Promise.all(snap.docs.map(d=>deleteDoc(d.ref)));
+    }
+    await setDoc(fdoc(db,`users/${uid}/data`,'subjects'),{list:[]});
+    await setDoc(fdoc(db,`users/${uid}/data`,'meta'),{horas:0});
+    await setDoc(fdoc(db,`users/${uid}/data`,'provas'),{list:[]});
+    await deleteDoc(fdoc(db,`users/${uid}/data`,'timerState')).catch(()=>{});
+    localStorage.removeItem('bz-timer');
+    alert('✅ Todos os dados foram resetados com sucesso!');
+    setTimeout(()=>window.location.reload(),800);
+  }catch(e){
+    console.error('resetData error',e);
+    alert('❌ Erro ao resetar: '+(e.code||e.message||'desconhecido'));
+  }
 };
 
 window.deleteAccount=async()=>{
