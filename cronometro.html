@@ -54,7 +54,7 @@
 .ring-wrap{position:relative;width:min(300px,80vw);height:min(300px,80vw);}
 .ring-svg{width:100%;height:100%;transform:rotate(-90deg);}
 .ring-bg{fill:none;stroke:rgba(255,255,255,.09);stroke-width:6;}
-.ring-fill{fill:none;stroke:#C69A3A;stroke-width:6;stroke-linecap:round;stroke-dasharray:791;stroke-dashoffset:791;transition:stroke-dashoffset .5s ease,stroke .3s;filter:drop-shadow(0 0 8px rgba(198,154,58,.5));}
+.ring-fill{fill:none;stroke:#C69A3A;stroke-width:6;stroke-linecap:round;stroke-dasharray:791;stroke-dashoffset:791;opacity:0;transition:stroke-dashoffset .5s ease,stroke .3s;filter:drop-shadow(0 0 8px rgba(198,154,58,.5));}
 .ring-fill-layer{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .5s ease;}
 .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;}
 .timer-time{font-size:clamp(26px,8.5vw,40px);font-weight:600;letter-spacing:2px;font-variant-numeric:tabular-nums;line-height:1;text-align:center;font-family:'JetBrains Mono',monospace;}
@@ -682,12 +682,14 @@ function updateDisplay(){
     const phaseColors={'work':'#C69A3A','short':'#C69A3A','long':'#F59E0B'};
     const phaseLabels={'work':'Foco — concentre-se!','short':'Pausa curta','long':'Pausa longa — descanse bem'};
     const col=phaseColors[pomPhase]||'#C69A3A';
+    ring.style.opacity='1';// anel base visível no Pomodoro (mostra o progresso da fase)
     ring.style.strokeDasharray=C;ring.style.strokeDashoffset=C-phasePct*C;ring.style.stroke=col;
     document.getElementById('timer-sub').textContent=phaseLabels[pomPhase]||'';
     document.getElementById('focus-subject').textContent=sub?sub.name:'';
     document.getElementById('focus-time').style.textShadow=`0 0 60px ${col}66, 0 0 120px ${col}22`;
     renderPomDots();
   }else{
+    ring.style.opacity='0';// esconde o anel base dourado no modo Livre (as camadas coloridas fazem o progresso; evita a bolinha residual da ponta arredondada)
     const e=getElapsed();
     const h=Math.floor(e/3600),m=Math.floor((e%3600)/60),s=e%60;
     const ts=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
@@ -827,7 +829,7 @@ window.resetTimer=()=>{
   document.getElementById('timer-time').textContent=initT;
   document.getElementById('focus-time').textContent=initT;
   document.getElementById('timer-sub').textContent='Pronto para estudar';
-  const ring=document.getElementById('ring');ring.style.strokeDashoffset=C;ring.style.stroke=pomMode?'#C69A3A':'#C69A3A';
+  const ring=document.getElementById('ring');ring.style.strokeDashoffset=C;ring.style.stroke='#C69A3A';ring.style.opacity=pomMode?'1':'0';
   document.getElementById('ring-layers').innerHTML='';// limpa os arcos de progresso
   if(pomMode)renderPomDots();
 };
