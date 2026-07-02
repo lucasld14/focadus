@@ -790,7 +790,9 @@ window.toggleTimer=()=>{
       document.getElementById('timer-sub').textContent='Foco — concentre-se!';
       ivl=setInterval(pomTick,1000);
     }else{
-      startTime=new Date(Date.now()-baseElapsed*1000);
+      // getElapsed() já soma baseElapsed, então startTime é o instante de agora (do play/retomada).
+      // NÃO usar (agora - baseElapsed) aqui: isso fazia getElapsed contar baseElapsed duas vezes (dobrava o tempo).
+      startTime=new Date();
       document.getElementById('timer-sub').textContent='Estudando...';
       ivl=setInterval(()=>{updateDisplay();saveTimerState();document.title=`▶ ${document.getElementById('timer-time').textContent} — Focadus`;},1000);
       saveTimerState();
