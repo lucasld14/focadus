@@ -734,7 +734,10 @@ function renderProgressRing(progressPct,todaySessions){
     }
   });
 
-  // Calcula o offset de cada matéria na barra
+  // Empilha o arco de cada matéria: cada uma começa onde a anterior terminou.
+  // currentOffset = fração já preenchida antes desta matéria; giramos o arco
+  // por currentOffset*360° para ele iniciar na posição certa (senão todos os
+  // arcos começavam do topo e ficavam sobrepostos em vez de empilhados).
   let currentOffset=0;
   Object.keys(bySubject).forEach(subId=>{
     const item=bySubject[subId];
@@ -747,6 +750,7 @@ function renderProgressRing(progressPct,todaySessions){
       circle.setAttribute('r','126');
       circle.setAttribute('class','ring-fill-layer');
       circle.setAttribute('stroke',color);
+      circle.setAttribute('transform',`rotate(${currentOffset*360} 140 140)`);
       circle.style.strokeDasharray=C;
       circle.style.strokeDashoffset=C-itemPct*C;
       layerGroup.appendChild(circle);
