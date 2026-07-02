@@ -306,7 +306,7 @@
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{initializeAppCheck,ReCaptchaV3Provider}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
 import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import{getFirestore,doc,getDoc,setDoc,collection,addDoc,query,where,getDocs,onSnapshot,deleteDoc,orderBy,Timestamp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,doc,getDoc,setDoc,updateDoc,collection,addDoc,query,where,getDocs,onSnapshot,deleteDoc,orderBy,Timestamp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
 let cu,subjects=[],baseElapsed=0,running=false,ivl=null,startTime=null;
@@ -415,10 +415,13 @@ window.setMode=function(mode){
    Funciona mesmo quando a aba fica em segundo plano (browser throttles setInterval
    mas Date.now() sempre reflete o tempo real). */
 function getElapsed(){
-  if(running&&startTime) return baseElapsed+Math.floor((Date.now()-startTime.getTime())/1000);
-  return baseElapsed;
+  const e=(running&&startTime)?baseElapsed+Math.floor((Date.now()-startTime.getTime())/1000):baseElapsed;
+  // Segunda trava de sanidade (mesmo limite de restoreTimerState) contra estado corrompido
+  if(e>TIMER_MAX_SECS){clearCorruptedTimer();return 0;}
+  return e;
 }
 
+const TIMER_MAX_SECS=12*3600;// acima disso, o estado é considerado corrompido (ex: app dormiu/recarregou com timer preso em "rodando")
 let _fsyncTimeout=null;
 function saveTimerState(){
   const sid=document.getElementById('subject-select').value;
@@ -426,14 +429,15 @@ function saveTimerState(){
   const state={
     baseElapsed,running,
     startTime:startTime?startTime.toISOString():null,
-    subjectId:sid||null,subjectName:sub?.name||'',subjectColor:sub?.color||''
+    subjectId:sid||null,subjectName:sub?.name||'',subjectColor:sub?.color||'',
+    syncedAt:Date.now()
   };
   localStorage.setItem('bz-timer',JSON.stringify(state));
   // Sync para Firestore a cada 30s (debounced) — para cross-device
   if(cu){
     clearTimeout(_fsyncTimeout);
     _fsyncTimeout=setTimeout(()=>{
-      setDoc(doc(db,`users/${cu.uid}/data`,'timerState'),{...state,syncedAt:Date.now()},{merge:true}).catch(()=>{});
+      setDoc(doc(db,`users/${cu.uid}/data`,'timerState'),state,{merge:true}).catch(()=>{});
     },running?30000:500);
   }
 }
@@ -457,11 +461,18 @@ async function restoreTimerFromFirestore(){
     if(!snap.exists())return;
     const sv=snap.data();
     const local=JSON.parse(localStorage.getItem('bz-timer')||'{}');
-    // Usa Firestore se for mais recente que o localStorage
+    // Usa Firestore só se for de fato mais recente que o localStorage (ambos agora gravam syncedAt)
     if((sv.syncedAt||0)>(local.syncedAt||0)){
       localStorage.setItem('bz-timer',JSON.stringify({...sv,syncedAt:sv.syncedAt}));
     }
   }catch(e){}
+}
+
+function clearCorruptedTimer(){
+  baseElapsed=0;startTime=null;running=false;
+  localStorage.removeItem('bz-timer');
+  if(cu){import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js").then(({deleteDoc,doc:fdoc})=>deleteDoc(fdoc(db,`users/${cu.uid}/data`,'timerState')).catch(()=>{}));}
+  showToast('O cronômetro tinha um estado inválido (provavelmente o app dormiu/recarregou) e foi resetado por segurança.');
 }
 
 function restoreTimerState(){
@@ -471,6 +482,15 @@ function restoreTimerState(){
   if(!sv)return;
   baseElapsed=sv.baseElapsed||0;
   startTime=sv.startTime?new Date(sv.startTime):null;
+  // Trava de sanidade: se o tempo decorrido calculado for absurdo (ex: app recarregou
+  // no celular com o timer "preso" em running e um startTime muito antigo), descarta
+  // o estado ao invés de mostrar horas impossíveis (bug relatado: 17h+ no timer).
+  const computedElapsed=(sv.running&&startTime)?baseElapsed+Math.floor((Date.now()-startTime.getTime())/1000):baseElapsed;
+  if(computedElapsed>TIMER_MAX_SECS){
+    clearCorruptedTimer();
+    updateDisplay();
+    return;
+  }
   if(sv.running&&startTime){
     running=true;
     document.getElementById('btn-play').classList.add('running');
@@ -639,12 +659,12 @@ function renderToday(){
     const sub=subjects.find(x=>x.id===s.subjectId);
     const h=Math.floor(s.duration/3600),m=Math.floor((s.duration%3600)/60),sc=s.duration%60;
     const d=s.startedAt.toDate?s.startedAt.toDate():new Date(s.startedAt);
-    return`<div class="session-row">
+    return`<div class="session-row" style="cursor:${sub?'pointer':'default'};" ${sub?`onclick="resumeSession(event,'${sub.id}')" title="Clique para continuar estudando ${escAttr(sub.name)}"`:''}>
       <div style="width:9px;height:9px;border-radius:50%;background:${sub?.color||'#6b8cae'};flex-shrink:0;"></div>
       <span style="flex:1;font-size:13px;">${sub?.name||'Sem matéria'}</span>
       <span style="font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;">${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}</span>
       <span style="font-size:11px;color:var(--muted);margin-left:8px;">${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
-      <button onclick="deleteSession('${s.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 8px;margin-left:4px;border-radius:6px;transition:all .15s;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+      <button onclick="event.stopPropagation();deleteSession('${s.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 8px;margin-left:4px;border-radius:6px;transition:all .15s;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
     </div>`;
   }).join('');
 }
@@ -745,6 +765,14 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
+window.resumeSession=(evt,subjectId)=>{
+  evt.stopPropagation();
+  if(running){showToast('Pause o cronômetro atual antes de continuar outra matéria.');return;}
+  const sub=subjects.find(x=>x.id===subjectId);
+  if(!sub)return;
+  selectSubject(sub.id,sub.name,sub.color||'#C69A3A');
+  toggleTimer();
+};
 window.toggleTimer=()=>{
   if(!running){
     const sid=document.getElementById('subject-select').value;if(!sid){showToast('Selecione uma matéria!');return;}
@@ -800,8 +828,14 @@ window.saveSession=async()=>{
   if(!sid){showToast('Selecione uma matéria!');return;}
   const sessionStart=startTime||new Date(Date.now()-e*1000);
   if(running){running=false;clearInterval(ivl);document.getElementById('btn-play').classList.remove('running');document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';}
+  // Se já existe sessão dessa matéria hoje, soma o tempo nela em vez de criar outra linha
+  const existing=(window._todaySessions||[]).find(s=>s.subjectId===sid);
   try{
-    await addDoc(collection(db,`users/${cu.uid}/sessions`),{subjectId:sid,duration:e,startedAt:Timestamp.fromDate(sessionStart),savedAt:Timestamp.now()});
+    if(existing){
+      await updateDoc(doc(db,`users/${cu.uid}/sessions`,existing.id),{duration:(existing.duration||0)+e,savedAt:Timestamp.now()});
+    }else{
+      await addDoc(collection(db,`users/${cu.uid}/sessions`),{subjectId:sid,duration:e,startedAt:Timestamp.fromDate(sessionStart),savedAt:Timestamp.now()});
+    }
     localStorage.removeItem('bz-timer');
     showToast('Sessão salva!');
     baseElapsed=0;startTime=null;

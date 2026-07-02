@@ -296,17 +296,26 @@ a{color:inherit;}
   .for-whom-grid{grid-template-columns:1fr!important;}
   .mobile-sticky-cta{display:block;}
 }
+@media(max-width:480px){
+  .hero-cta-group{flex-direction:column;width:100%;gap:12px;}
+  .btn-hero-primary,.btn-hero-sec{width:100%;justify-content:center;padding:16px 18px;font-size:15px;}
+  .btn-nav-login{padding:10px 18px;min-height:44px;}
+  nav .nav-actions{gap:10px;}
+  #install-btn{padding:10px 14px;font-size:12px;}
+}
 @media(max-width:360px){
-  .hero-cta-group{flex-direction:column;width:100%;}
-  .btn-hero-primary,.btn-hero-sec{width:100%;justify-content:center;}
+  .hero{padding:100px 3% 80px;}
+  .hero-title{font-size:clamp(28px,6vw,48px);}
+  .btn-hero-primary,.btn-hero-sec{font-size:14px;padding:14px 16px;}
+  .app-badge-btn{font-size:12px;padding:9px 14px;}
 }
 
 /* ── APP DOWNLOAD BADGES ── */
 .app-badges{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:1.75rem;flex-wrap:wrap;}
-.app-badges-label{font-size:12px;color:var(--muted);width:100%;text-align:center;letter-spacing:.04em;}
-.app-badge-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--text);font-size:14px;font-weight:600;font-family:var(--font-d);cursor:pointer;transition:all .22s;text-decoration:none;}
+.app-badges-label{font-size:12px;color:var(--muted);width:100%;text-align:center;letter-spacing:.04em;margin-bottom:12px;}
+.app-badge-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--text);font-size:14px;font-weight:600;font-family:var(--font-d);cursor:pointer;transition:all .22s;text-decoration:none;min-height:44px;min-width:120px;justify-content:center;}
 .app-badge-btn:hover{border-color:rgba(198,154,58,.4);background:rgba(198,154,58,.08);color:var(--blue);}
-.app-badge-btn svg{opacity:.8;}
+.app-badge-btn svg{opacity:.8;flex-shrink:0;}
 
 /* ── APP SECTION ── */
 .app-section{padding:80px 5%;background:linear-gradient(180deg,transparent,rgba(198,154,58,.04),transparent);}
