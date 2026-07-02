@@ -765,12 +765,18 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
+let seededExistingSessionId=null;
 window.resumeSession=(evt,subjectId)=>{
   evt.stopPropagation();
   if(running){showToast('Pause o cronômetro atual antes de continuar outra matéria.');return;}
   const sub=subjects.find(x=>x.id===subjectId);
   if(!sub)return;
+  const existing=(window._todaySessions||[]).find(s=>s.subjectId===subjectId);
   selectSubject(sub.id,sub.name,sub.color||'#C69A3A');
+  if(existing){
+    seededExistingSessionId=existing.id;
+    baseElapsed=existing.duration||0;
+  }
   toggleTimer();
 };
 window.toggleTimer=()=>{
@@ -804,7 +810,7 @@ window.toggleTimer=()=>{
 window.resetTimer=()=>{
   if(running){running=false;clearInterval(ivl);ivl=null;}
   clearTimeout(pomAutoTimer);
-  baseElapsed=0;startTime=null;
+  baseElapsed=0;startTime=null;seededExistingSessionId=null;
   pomPhase='work';pomLeft=0;pomTotal=0;pomCyclesDone=0;
   localStorage.removeItem('bz-timer');
   if(cu){import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js").then(({deleteDoc,doc:fdoc})=>deleteDoc(fdoc(db,`users/${cu.uid}/data`,'timerState')).catch(()=>{}));}
@@ -828,14 +834,18 @@ window.saveSession=async()=>{
   if(!sid){showToast('Selecione uma matéria!');return;}
   const sessionStart=startTime||new Date(Date.now()-e*1000);
   if(running){running=false;clearInterval(ivl);document.getElementById('btn-play').classList.remove('running');document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';}
-  // Se já existe sessão dessa matéria hoje, soma o tempo nela em vez de criar outra linha
+  // Se já existe sessão dessa matéria hoje, soma o tempo nela em vez de criar outra linha.
+  // Se o cronômetro foi "semeado" a partir dela (resumeSession já incluiu o tempo antigo em baseElapsed/e),
+  // usa "e" direto — senão somaria o tempo antigo duas vezes.
   const existing=(window._todaySessions||[]).find(s=>s.subjectId===sid);
   try{
     if(existing){
-      await updateDoc(doc(db,`users/${cu.uid}/sessions`,existing.id),{duration:(existing.duration||0)+e,savedAt:Timestamp.now()});
+      const newDuration=(seededExistingSessionId===existing.id)?e:(existing.duration||0)+e;
+      await updateDoc(doc(db,`users/${cu.uid}/sessions`,existing.id),{duration:newDuration,savedAt:Timestamp.now()});
     }else{
       await addDoc(collection(db,`users/${cu.uid}/sessions`),{subjectId:sid,duration:e,startedAt:Timestamp.fromDate(sessionStart),savedAt:Timestamp.now()});
     }
+    seededExistingSessionId=null;
     localStorage.removeItem('bz-timer');
     showToast('Sessão salva!');
     baseElapsed=0;startTime=null;
