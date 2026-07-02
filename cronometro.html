@@ -310,6 +310,7 @@ import{getFirestore,doc,getDoc,setDoc,updateDoc,collection,addDoc,query,where,ge
 const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
 let cu,subjects=[],baseElapsed=0,running=false,ivl=null,startTime=null;
+let seededExistingSessionId=null;// id da sessão que está sendo CONTINUADA (clicou pra retomar); persistido no timerState p/ sobreviver a recarregamentos
 let pomMode=false,pomPhase='work',pomLeft=0,pomTotal=0,pomCyclesDone=0,pomAutoTimer=null;
 let dailyMeta=4*3600;// meta diária em segundos (default 4h; loadToday sobrescreve com o valor real)
 const C=2*Math.PI*126;
@@ -430,6 +431,7 @@ function saveTimerState(){
     baseElapsed,running,
     startTime:startTime?startTime.toISOString():null,
     subjectId:sid||null,subjectName:sub?.name||'',subjectColor:sub?.color||'',
+    seededExistingSessionId:seededExistingSessionId||null,
     syncedAt:Date.now()
   };
   localStorage.setItem('bz-timer',JSON.stringify(state));
@@ -450,6 +452,7 @@ async function syncTimerToFirestore(){
     baseElapsed,running,
     startTime:startTime?startTime.toISOString():null,
     subjectId:sid||null,subjectName:sub?.name||'',subjectColor:sub?.color||'',
+    seededExistingSessionId:seededExistingSessionId||null,
     syncedAt:Date.now()
   },{merge:true}).catch(()=>{});
 }
@@ -469,7 +472,7 @@ async function restoreTimerFromFirestore(){
 }
 
 function clearCorruptedTimer(){
-  baseElapsed=0;startTime=null;running=false;
+  baseElapsed=0;startTime=null;running=false;seededExistingSessionId=null;
   localStorage.removeItem('bz-timer');
   if(cu){import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js").then(({deleteDoc,doc:fdoc})=>deleteDoc(fdoc(db,`users/${cu.uid}/data`,'timerState')).catch(()=>{}));}
   showToast('O cronômetro tinha um estado inválido (provavelmente o app dormiu/recarregou) e foi resetado por segurança.');
@@ -482,6 +485,7 @@ function restoreTimerState(){
   if(!sv)return;
   baseElapsed=sv.baseElapsed||0;
   startTime=sv.startTime?new Date(sv.startTime):null;
+  seededExistingSessionId=sv.seededExistingSessionId||null;// restaura qual sessão estava sendo continuada (evita duplicar ao salvar após recarregar)
   // Trava de sanidade: se o tempo decorrido calculado for absurdo (ex: app recarregou
   // no celular com o timer "preso" em running e um startTime muito antigo), descarta
   // o estado ao invés de mostrar horas impossíveis (bug relatado: 17h+ no timer).
@@ -771,7 +775,6 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-let seededExistingSessionId=null;
 window.resumeSession=(evt,subjectId)=>{
   evt.stopPropagation();
   if(running){showToast('Pause o cronômetro atual antes de continuar outra matéria.');return;}
