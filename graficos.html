@@ -125,6 +125,14 @@
       </div>
     </div>
   </div>
+
+  <div class="panel" style="margin-top:1.25rem;">
+    <div class="panel-header">
+      <span class="panel-title">Histórico completo de sessões</span>
+      <span style="font-size:12px;color:var(--muted);">Corrija ou apague sessões com duração errada aqui</span>
+    </div>
+    <div id="history-list" style="max-height:420px;overflow-y:auto;"></div>
+  </div>
 </main>
 
 <!-- MODAL PERFIL -->
@@ -159,7 +167,7 @@
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{initializeAppCheck,ReCaptchaV3Provider}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
 import{getAuth,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import{getFirestore,doc,getDoc,setDoc,collection,query,orderBy,onSnapshot,where,getDocs}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,doc,getDoc,setDoc,collection,query,orderBy,onSnapshot,where,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
@@ -250,6 +258,7 @@ onAuthStateChanged(auth,async user=>{
     buildPie(pieMode);
     buildStats();
     buildTopSubjects();
+    buildHistory();
   });
 });
 
@@ -262,6 +271,57 @@ function setAvatar(name,photo){
 }
 function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return`${h}h ${m}m`;}
 function gD(s){return s.startedAt.toDate?s.startedAt.toDate():new Date(s.startedAt);}
+function escAttr(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+const HISTORY_SUSPECT_SECS=8*3600;// duração acima disso é destacada como possível bug (ex: o caso de 70h numa sessão só)
+function buildHistory(){
+  const el=document.getElementById('history-list');
+  if(!el)return;
+  if(!sessions.length){el.innerHTML='<div class="empty-state" style="height:100px"><div class="empty-text">Nenhuma sessão ainda.</div></div>';return;}
+  el.innerHTML=sessions.map(s=>{
+    const sub=subjects.find(x=>x.id===s.subjectId);
+    const dur=s.duration||0;
+    const suspect=dur>HISTORY_SUSPECT_SECS;
+    const d=s.startedAt?gD(s):null;
+    const dateStr=d?d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',weekday:'short'}):'sem data';
+    const timeStr=d?d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';
+    return`<div class="stat-item" style="${suspect?'background:rgba(255,77,109,.06);border-radius:8px;padding:10px 12px;':''}">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+        <div class="sub-dot" style="background:${sub?.color||'#6b8cae'};"></div>
+        <span style="font-size:13px;">${escAttr(sub?.name||'Sem matéria')}</span>
+        <span style="font-size:11px;color:var(--muted);">${dateStr} ${timeStr}</span>
+        ${suspect?'<span style="font-size:11px;color:var(--red);font-weight:600;">⚠ duração suspeita</span>':''}
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <span class="stat-val">${fmt(dur)}</span>
+        <button onclick="editHistorySession('${s.id}',${dur})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:6px;" title="Editar duração">✎</button>
+        <button onclick="deleteHistorySession('${s.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:6px;" title="Excluir">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.deleteHistorySession=(id)=>{
+  bzConfirm('Excluir sessão','Tem certeza que deseja excluir esta sessão do histórico? Essa ação não pode ser desfeita.','danger',async()=>{
+    try{
+      await deleteDoc(doc(db,`users/${cu.uid}/sessions`,id));
+    }catch(e){
+      bzAlert('Erro ao excluir',e.code||e.message||'desconhecido','danger');
+    }
+  });
+};
+window.editHistorySession=(id,currentSecs)=>{
+  const currentH=(currentSecs/3600).toFixed(2);
+  bzPrompt('Editar duração','Nova duração em horas (ex: 1.5 para 1h30):',currentH,null,async(val)=>{
+    const h=parseFloat((val||'').replace(',','.'));
+    if(isNaN(h)||h<0||h>24){bzAlert('Valor inválido','Digite um número de horas entre 0 e 24.','danger');return;}
+    try{
+      await updateDoc(doc(db,`users/${cu.uid}/sessions`,id),{duration:Math.round(h*3600)});
+    }catch(e){
+      bzAlert('Erro ao editar',e.code||e.message||'desconhecido','danger');
+    }
+  });
+};
 function gc(){const d=document.documentElement.getAttribute('data-theme')==='dark';return{grid:d?'#1e3a5c':'#d0dce8',text:d?'#6b8cae':'#5F7A99'};}
 
 function filterSessions(mode){
