@@ -834,14 +834,13 @@ window.saveSession=async()=>{
   if(!sid){showToast('Selecione uma matéria!');return;}
   const sessionStart=startTime||new Date(Date.now()-e*1000);
   if(running){running=false;clearInterval(ivl);document.getElementById('btn-play').classList.remove('running');document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';}
-  // Se já existe sessão dessa matéria hoje, soma o tempo nela em vez de criar outra linha.
-  // Se o cronômetro foi "semeado" a partir dela (resumeSession já incluiu o tempo antigo em baseElapsed/e),
-  // usa "e" direto — senão somaria o tempo antigo duas vezes.
-  const existing=(window._todaySessions||[]).find(s=>s.subjectId===sid);
+  // Só mescla quando o usuário clicou numa sessão para CONTINUÁ-LA (seededExistingSessionId).
+  // Nesse caso, "e" já inclui o tempo antigo (resumeSession semeou baseElapsed), então grava "e" direto.
+  // Qualquer outro salvamento cria uma sessão NOVA — assim o usuário vê a linha aparecer e sabe que salvou.
+  const resumeTarget=seededExistingSessionId?(window._todaySessions||[]).find(s=>s.id===seededExistingSessionId):null;
   try{
-    if(existing){
-      const newDuration=(seededExistingSessionId===existing.id)?e:(existing.duration||0)+e;
-      await updateDoc(doc(db,`users/${cu.uid}/sessions`,existing.id),{duration:newDuration,savedAt:Timestamp.now()});
+    if(resumeTarget){
+      await updateDoc(doc(db,`users/${cu.uid}/sessions`,resumeTarget.id),{duration:e,savedAt:Timestamp.now()});
     }else{
       await addDoc(collection(db,`users/${cu.uid}/sessions`),{subjectId:sid,duration:e,startedAt:Timestamp.fromDate(sessionStart),savedAt:Timestamp.now()});
     }
