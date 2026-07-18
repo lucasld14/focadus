@@ -41,6 +41,15 @@
 .empty-provas{text-align:center;padding:4rem 1rem;color:var(--muted);}
 .empty-provas .empty-icon{margin-bottom:1rem;display:flex;justify-content:center;}
 .empty-provas .empty-text{font-size:15px;line-height:1.7;}
+.insc-row{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.insc-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:filter .15s;font-family:inherit;}
+.insc-pill.insc-done{background:rgba(29,158,117,.12);color:var(--green);}
+.insc-pill.insc-pending{background:rgba(239,159,39,.12);color:var(--amber);}
+.insc-pill:hover{filter:brightness(1.12);}
+.insc-date-label{font-size:12px;color:var(--muted);}
+.insc-date-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 8px;font-size:12px;font-family:inherit;cursor:pointer;color-scheme:dark;}
+[data-theme="light"] .insc-date-input{color-scheme:light;}
+.insc-date-input:hover{border-color:var(--border-hover);}
 
 @media(max-width:700px){
   .prova-num{font-size:38px;}
@@ -96,6 +105,14 @@
     <input class="modal-input" type="text" id="prova-nome" placeholder="Ex: ENEM, Vestibular, OAB...">
     <label class="modal-label">Data da prova</label>
     <input class="modal-input" type="date" id="prova-data">
+    <label class="modal-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:16px;">
+      <input type="checkbox" id="prova-inscricao-feita" onchange="toggleInscDataField()" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer;">
+      Já fiz a inscrição desta prova
+    </label>
+    <div id="insc-data-wrap">
+      <label class="modal-label">Data da inscrição <span style="color:var(--muted);font-weight:400;">(opcional — quando abre ou fecha)</span></label>
+      <input class="modal-input" type="date" id="prova-inscricao-data">
+    </div>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeProvaModal()">Cancelar</button>
       <button class="btn-primary" onclick="addProva()">Adicionar</button>
@@ -239,12 +256,21 @@ function renderProvas(){
     const passados=total-diff;
     const pctBar=total>0?Math.min(Math.round(passados/total*100),100):100;
     const st=getStatus(diff);
+    const provaId=p.id||p.criadaEm;
+    const inscFeita=!!p.inscricaoFeita;
+    const checkSvg='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const circleSvg='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>';
+    const inscHtml=`<div class="insc-row">
+      <button class="insc-pill ${inscFeita?'insc-done':'insc-pending'}" onclick="toggleInscricao('${provaId}')" title="${inscFeita?'Clique para marcar como pendente':'Clique para marcar como feita'}">${inscFeita?checkSvg+' Inscrição feita':circleSvg+' Inscrição pendente'}</button>
+      ${!inscFeita?`<span class="insc-date-label">Inscrição:</span><input type="date" class="insc-date-input" value="${p.inscricaoData||''}" onchange="setInscricaoData('${provaId}',this.value)" title="Quando é a inscrição">`:''}
+    </div>`;
     return`<div class="prova-card ${st.cardCls}">
       <div class="prova-header">
         <div style="flex:1;">
           <div class="prova-nome">${p.nome}</div>
           <div class="prova-data">${dataProva.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
           <span class="status-badge ${st.cls}">${st.label}</span>
+          ${inscHtml}
         </div>
         <div style="display:flex;align-items:flex-start;gap:8px;">
           ${diff>=0?`<div class="prova-dias-big"><div class="prova-num" style="color:${diff<=7?'var(--red)':diff<=30?'var(--amber)':'var(--blue)'};">${diff}</div><div class="prova-dias-label">dias</div></div>`:''}
@@ -260,15 +286,18 @@ function renderProvas(){
   _midnightTimer=setTimeout(renderProvas,prox-Date.now());
 }
 
-window.openProvaModal=()=>{document.getElementById('prova-data').min=new Date().toISOString().slice(0,10);document.getElementById('modal-prova').classList.add('open');setTimeout(()=>document.getElementById('prova-nome').focus(),100);};
-window.closeProvaModal=()=>{document.getElementById('modal-prova').classList.remove('open');document.getElementById('prova-nome').value='';document.getElementById('prova-data').value='';};
+window.openProvaModal=()=>{document.getElementById('prova-data').min=new Date().toISOString().slice(0,10);document.getElementById('prova-inscricao-feita').checked=false;document.getElementById('prova-inscricao-data').value='';document.getElementById('insc-data-wrap').style.display='';document.getElementById('modal-prova').classList.add('open');setTimeout(()=>document.getElementById('prova-nome').focus(),100);};
+window.closeProvaModal=()=>{document.getElementById('modal-prova').classList.remove('open');document.getElementById('prova-nome').value='';document.getElementById('prova-data').value='';document.getElementById('prova-inscricao-feita').checked=false;document.getElementById('prova-inscricao-data').value='';document.getElementById('insc-data-wrap').style.display='';};
+window.toggleInscDataField=()=>{const done=document.getElementById('prova-inscricao-feita').checked;document.getElementById('insc-data-wrap').style.display=done?'none':'';};
 window.addProva=async()=>{
   const nome=document.getElementById('prova-nome').value.trim();
   const data=document.getElementById('prova-data').value;
   if(!nome||!data)return;
   const hoje=new Date();hoje.setHours(0,0,0,0);
   if(new Date(data+'T00:00:00')<hoje){bzAlert('Data inválida','A data da prova precisa ser hoje ou no futuro.','warn');return;}
-  const nova={id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)),nome,data,criadaEm:Date.now()};
+  const inscFeita=document.getElementById('prova-inscricao-feita').checked;
+  const inscData=document.getElementById('prova-inscricao-data').value||null;
+  const nova={id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)),nome,data,inscricaoFeita:inscFeita,inscricaoData:inscFeita?null:inscData,criadaEm:Date.now()};
   try{
     await setDoc(doc(db,`users/${cu.uid}/data`,'provas'),{list:[...provas,nova]});
     provas.push(nova);
@@ -282,6 +311,25 @@ window.removeProva=async(id)=>{
     await setDoc(doc(db,`users/${cu.uid}/data`,'provas'),{list:provas});
     renderProvas();
   }catch(e){provas=backup;renderProvas();bzAlert('Erro ao remover prova',(e.code||e.message||'desconhecido'),'danger');}
+};
+window.toggleInscricao=async(id)=>{
+  const p=provas.find(x=>String(x.id||x.criadaEm)===String(id));
+  if(!p)return;
+  const backup=provas.map(x=>({...x}));
+  p.inscricaoFeita=!p.inscricaoFeita;// alterna feita/pendente; a data é preservada
+  try{
+    await setDoc(doc(db,`users/${cu.uid}/data`,'provas'),{list:provas});
+    renderProvas();
+  }catch(e){provas=backup;renderProvas();bzAlert('Erro ao atualizar inscrição',(e.code||e.message||'desconhecido'),'danger');}
+};
+window.setInscricaoData=async(id,value)=>{
+  const p=provas.find(x=>String(x.id||x.criadaEm)===String(id));
+  if(!p)return;
+  const backup=provas.map(x=>({...x}));
+  p.inscricaoData=value||null;
+  try{
+    await setDoc(doc(db,`users/${cu.uid}/data`,'provas'),{list:provas});
+  }catch(e){provas=backup;renderProvas();bzAlert('Erro ao salvar data da inscrição',(e.code||e.message||'desconhecido'),'danger');}
 };
 
 window.openProfileModal=()=>{const name=document.getElementById('user-name-el').textContent;document.getElementById('profile-name-inp').value=name;const big=document.getElementById('profile-avatar-big');const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);big.innerHTML=window._profilePhoto?`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:28px;font-weight:700;">${initials}</span>`;document.getElementById('modal-profile').classList.add('open');};
