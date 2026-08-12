@@ -34,10 +34,17 @@
 .cont-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;flex-shrink:0;}
 .membar{height:6px;border-radius:4px;background:var(--surface2);overflow:hidden;margin-top:10px;}
 .membar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
-.tipo-pill{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:2px 8px;}
 .due-pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
 .due-atrasada{background:rgba(226,75,74,.12);color:var(--red);}
 .due-hoje{background:rgba(239,159,39,.14);color:var(--amber);}
+
+/* Blocos de matéria (filtro clicável) */
+.materia-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:1.5rem;}
+.materia-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem 1.1rem;cursor:pointer;transition:all .18s;}
+.materia-card:hover{border-color:rgba(198,154,58,.3);transform:translateY(-1px);}
+.materia-card.on{border-color:#C69A3A;background:rgba(198,154,58,.08);}
+.materia-nome{font-size:14px;font-weight:600;}
+.materia-meta{font-size:12px;color:var(--muted);margin-top:4px;}
 
 /* Estrelas de importância */
 .star-row{display:flex;gap:6px;margin-top:4px;}
@@ -110,6 +117,7 @@ select.modal-input{cursor:pointer;}
   <div class="sec-title" style="margin-top:0;">Sua memória hoje</div>
   <div class="mem-grid" id="mem-grid"></div>
 
+  <div id="materias-wrap"></div>
   <div id="hoje-wrap"></div>
   <div id="todos-wrap"></div>
 </main>
@@ -125,23 +133,12 @@ select.modal-input{cursor:pointer;}
     <input class="modal-input" type="text" id="c-titulo" placeholder="Ex: Função quadrática">
     <label class="modal-label">Importância</label>
     <div class="star-row" id="star-row"></div>
-    <label class="modal-label" style="margin-top:14px;">Tipo</label>
-    <select class="modal-input" id="c-tipo">
-      <option value="teorico">Teórico</option>
-      <option value="exercicios">Exercícios</option>
-      <option value="formulas">Fórmulas</option>
-      <option value="conceitos">Conceitos</option>
-      <option value="vocabulario">Vocabulário</option>
-      <option value="misto" selected>Misto</option>
-    </select>
-    <label class="modal-label">Data em que estudou</label>
+    <label class="modal-label" style="margin-top:14px;">Data em que estudou</label>
     <input class="modal-input" type="date" id="c-data">
-    <label class="modal-label">Conteúdo / resumo</label>
-    <textarea class="modal-textarea" id="c-conteudo" placeholder="Explicação ou resumo do assunto..."></textarea>
+    <label class="modal-label">Subconteúdos</label>
+    <textarea class="modal-textarea" id="c-subconteudos" placeholder="Ex: função completa, incompleta, vértice, raízes..."></textarea>
     <label class="modal-label" style="margin-top:12px;">Minhas anotações</label>
     <textarea class="modal-textarea" id="c-anotacoes" placeholder="Observações pessoais..."></textarea>
-    <label class="modal-label" style="margin-top:12px;">Fórmulas</label>
-    <textarea class="modal-textarea" id="c-formulas" placeholder="Fórmulas importantes..."></textarea>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeConteudoModal()">Cancelar</button>
       <button class="btn-primary" onclick="saveConteudo()">Salvar</button>
@@ -229,6 +226,7 @@ const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
 let cu,subjects=[],conteudos=[];
 let editingId=null,detalheId=null,revisandoId=null;
+let materiaFiltro=null;// null = todas as matérias
 
 const th=localStorage.getItem('bz-theme')||'dark';
 document.documentElement.setAttribute('data-theme',th);
@@ -240,8 +238,6 @@ function addDays(dstr,n){const d=new Date(dstr+'T00:00:00');d.setDate(d.getDate(
 function diffDays(aStr,bStr){return Math.round((new Date(aStr+'T00:00:00')-new Date(bStr+'T00:00:00'))/(1000*60*60*24));}
 function fmtBr(dstr){if(!dstr)return'';return new Date(dstr+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-
-const TIPO_LABEL={teorico:'Teórico',exercicios:'Exercícios',formulas:'Fórmulas',conceitos:'Conceitos',vocabulario:'Vocabulário',misto:'Misto'};
 
 /* ───── MOTOR DE REVISÃO (SM-2 adaptado, conservador) ───── */
 const EASE_MIN=1.3,EASE_MAX=2.3,EASE_DEFAULT=1.7;
@@ -341,9 +337,47 @@ async function loadConteudos(){
 /* ───── Render ───── */
 function render(){
   renderMemGrid();
+  renderMaterias();
   renderHoje();
   renderTodos();
 }
+/* Prioridade: atrasadas primeiro, depois vencendo antes, e em empate a importância maior.
+   É o que faz "os mais necessários" ficarem no topo. */
+function prioridade(c){
+  const t=todayStr();
+  const nr=c.nextReview||t;
+  const atraso=diffDays(t,nr);// >0 = atrasada há X dias
+  return -(atraso*10+(c.importancia||1));
+}
+function sortPrioridade(list){return [...list].sort((a,b)=>prioridade(a)-prioridade(b));}
+function visiveis(){return materiaFiltro?conteudos.filter(c=>(c.materia||'Sem matéria')===materiaFiltro):conteudos;}
+let _materiaNomes=[];// índice usado pelos cliques (evita interpolar o nome no onclick, que quebraria com aspas)
+function renderMaterias(){
+  const wrap=document.getElementById('materias-wrap');
+  if(!conteudos.length){wrap.innerHTML='';return;}
+  const t=todayStr();
+  const byMat={};
+  conteudos.forEach(c=>{const m=c.materia||'Sem matéria';(byMat[m]=byMat[m]||[]).push(c);});
+  _materiaNomes=Object.keys(byMat).sort();
+  const cards=_materiaNomes.map((m,i)=>{
+    const list=byMat[m];
+    const due=list.filter(c=>(c.nextReview||t)<=t).length;
+    const on=materiaFiltro===m;
+    return`<div class="materia-card${on?' on':''}" onclick="filtrarMateria(${i})">
+      <div class="materia-nome">${esc(m)}</div>
+      <div class="materia-meta">${list.length} conteúdo${list.length===1?'':'s'}${due?` · <span style="color:var(--amber);font-weight:600;">${due} para revisar</span>`:''}</div>
+    </div>`;
+  }).join('');
+  const totalDue=conteudos.filter(c=>(c.nextReview||t)<=t).length;
+  wrap.innerHTML=`<div class="sec-title" style="margin-top:0;">Matérias</div><div class="materia-grid">
+    <div class="materia-card${materiaFiltro===null?' on':''}" onclick="filtrarMateria(-1)"><div class="materia-nome">Todas</div><div class="materia-meta">${conteudos.length} conteúdo${conteudos.length===1?'':'s'}${totalDue?` · <span style="color:var(--amber);font-weight:600;">${totalDue} para revisar</span>`:''}</div></div>
+    ${cards}</div>`;
+}
+window.filtrarMateria=(i)=>{
+  const m=(i<0)?null:_materiaNomes[i];
+  materiaFiltro=(materiaFiltro===m)?null:m;
+  render();window.scrollTo({top:0,behavior:'smooth'});
+};
 function renderMemGrid(){
   const counts={risco:0,atencao:0,estavel:0,consolidado:0};
   conteudos.forEach(c=>{counts[statusOf(c).key]++;});
@@ -357,13 +391,14 @@ function renderMemGrid(){
 }
 function renderHoje(){
   const t=todayStr();
-  const due=conteudos.filter(c=>(c.nextReview||t)<=t).sort((a,b)=>(a.nextReview||t)<(b.nextReview||t)?-1:1);
+  const due=sortPrioridade(visiveis().filter(c=>(c.nextReview||t)<=t));
   const wrap=document.getElementById('hoje-wrap');
+  const sufixo=materiaFiltro?` · ${esc(materiaFiltro)}`:'';
   if(!due.length){
-    wrap.innerHTML=`<div class="sec-title">Revisões de hoje</div><div class="cont-card" style="cursor:default;text-align:center;color:var(--muted);">Nenhuma revisão pendente. Tudo em dia! 🎉</div>`;
+    wrap.innerHTML=`<div class="sec-title">Revisões de hoje${sufixo}</div><div class="cont-card" style="cursor:default;text-align:center;color:var(--muted);">${materiaFiltro?'Nada pendente nesta matéria.':'Nenhuma revisão pendente. Tudo em dia!'}</div>`;
     return;
   }
-  wrap.innerHTML=`<div class="sec-title">Revisões de hoje · ${due.length}</div>`+due.map(c=>cardHtml(c,true)).join('');
+  wrap.innerHTML=`<div class="sec-title">Revisões de hoje${sufixo} · ${due.length}</div>`+due.map(c=>cardHtml(c,true)).join('');
 }
 function renderTodos(){
   const wrap=document.getElementById('todos-wrap');
@@ -371,12 +406,18 @@ function renderTodos(){
     wrap.innerHTML=`<div class="sec-title">Todos os conteúdos</div><div class="cont-card" style="cursor:default;text-align:center;color:var(--muted);padding:2.5rem 1rem;">Nenhum conteúdo cadastrado ainda.<br>Adicione o primeiro com "+ Novo conteúdo".</div>`;
     return;
   }
+  const lista=visiveis();
+  if(materiaFiltro){
+    // Filtrado: lista única, mais necessários no topo
+    wrap.innerHTML=`<div class="sec-title">${esc(materiaFiltro)} · ${lista.length} conteúdo${lista.length===1?'':'s'}</div>`+sortPrioridade(lista).map(c=>cardHtml(c,false)).join('');
+    return;
+  }
   const byMat={};
-  conteudos.forEach(c=>{const m=c.materia||'Sem matéria';(byMat[m]=byMat[m]||[]).push(c);});
-  let html=`<div class="sec-title">Todos os conteúdos · ${conteudos.length}</div>`;
+  lista.forEach(c=>{const m=c.materia||'Sem matéria';(byMat[m]=byMat[m]||[]).push(c);});
+  let html=`<div class="sec-title">Todos os conteúdos · ${lista.length}</div>`;
   Object.keys(byMat).sort().forEach(m=>{
     html+=`<div style="font-size:13px;font-weight:600;margin:14px 0 8px;color:var(--text);">${esc(m)}</div>`;
-    html+=byMat[m].sort((a,b)=>(a.nextReview||'')<(b.nextReview||'')?-1:1).map(c=>cardHtml(c,false)).join('');
+    html+=sortPrioridade(byMat[m]).map(c=>cardHtml(c,false)).join('');
   });
   wrap.innerHTML=html;
 }
@@ -393,7 +434,7 @@ function cardHtml(c,showDue){
     <div class="cont-top">
       <div style="min-width:0;">
         <div class="cont-nome">${esc(c.titulo)}</div>
-        <div class="cont-meta"><span class="tipo-pill">${TIPO_LABEL[c.tipo]||'Misto'}</span>${'★'.repeat(c.importancia||1)}${duePill}${nextInfo?`<span>${nextInfo}</span>`:''}</div>
+        <div class="cont-meta"><span style="color:#F5C462;">${'★'.repeat(c.importancia||1)}</span>${duePill}${nextInfo?`<span>${nextInfo}</span>`:''}</div>
       </div>
       <span class="cont-status" style="background:${st.color}1f;color:${st.color};"><span class="mem-dot" style="background:${st.color};"></span>${st.label}</span>
     </div>
@@ -426,12 +467,10 @@ window.openConteudoModal=(id)=>{
   document.getElementById('c-materia').value=c?c.materia||'':'';
   document.getElementById('c-titulo').value=c?c.titulo||'':'';
   starSel=c?(c.importancia||3):3;renderStars();
-  document.getElementById('c-tipo').value=c?(c.tipo||'misto'):'misto';
   document.getElementById('c-data').value=c?(c.studiedAt||todayStr()):todayStr();
   document.getElementById('c-data').max=todayStr();
-  document.getElementById('c-conteudo').value=c?c.conteudo||'':'';
+  document.getElementById('c-subconteudos').value=c?(c.subconteudos||''):'';
   document.getElementById('c-anotacoes').value=c?c.anotacoes||'':'';
-  document.getElementById('c-formulas').value=c?c.formulas||'':'';
   document.getElementById('modal-conteudo').classList.add('open');
   setTimeout(()=>document.getElementById('c-materia').focus(),100);
 };
@@ -443,11 +482,10 @@ window.saveConteudo=async()=>{
   if(!titulo){bzAlert('Faltou o conteúdo','Digite o nome do conteúdo/assunto.','warn');return;}
   const base={
     materia:materia||'Sem matéria',titulo,
-    importancia:starSel,tipo:document.getElementById('c-tipo').value,
+    importancia:starSel,
     studiedAt,
-    conteudo:document.getElementById('c-conteudo').value,
+    subconteudos:document.getElementById('c-subconteudos').value,
     anotacoes:document.getElementById('c-anotacoes').value,
-    formulas:document.getElementById('c-formulas').value,
   };
   try{
     if(editingId){
@@ -464,21 +502,21 @@ window.saveConteudo=async()=>{
 };
 
 /* ───── Detalhe ───── */
-let detTab='conteudo';
+let detTab='subconteudos';
 window.openDetalhe=(id)=>{
-  detalheId=id;detTab='conteudo';
+  detalheId=id;detTab='subconteudos';
   const c=conteudos.find(x=>x.id===id);if(!c)return;
   const st=statusOf(c),ml=memoryLevel(c);
   document.getElementById('det-head').innerHTML=`
     <div class="modal-title" style="margin-bottom:2px;">${esc(c.titulo)}</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">${esc(c.materia||'')} · ${TIPO_LABEL[c.tipo]||'Misto'} · ${'★'.repeat(c.importancia||1)}</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">${esc(c.materia||'')} · <span style="color:#F5C462;">${'★'.repeat(c.importancia||1)}</span></div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
       <span class="cont-status" style="background:${st.color}1f;color:${st.color};"><span class="mem-dot" style="background:${st.color};"></span>${st.label}</span>
       <span style="font-size:13px;color:var(--muted);">Memória ${ml}%</span>
       <span style="font-size:13px;color:var(--muted);">Próxima: ${fmtBr(c.nextReview)||'—'}</span>
     </div>
     <div class="membar"><div class="membar-fill" style="width:${ml}%;background:${st.color};"></div></div>`;
-  document.getElementById('det-tabs').innerHTML=[['conteudo','Conteúdo'],['anotacoes','Anotações'],['formulas','Fórmulas'],['historico','Histórico']].map(([k,l])=>`<button class="det-tab${detTab===k?' on':''}" data-tab="${k}" onclick="setDetTab('${k}')">${l}</button>`).join('');
+  document.getElementById('det-tabs').innerHTML=[['subconteudos','Subconteúdos'],['anotacoes','Anotações'],['historico','Histórico']].map(([k,l])=>`<button class="det-tab${detTab===k?' on':''}" data-tab="${k}" onclick="setDetTab('${k}')">${l}</button>`).join('');
   renderDetBody();
   document.getElementById('det-edit-btn').onclick=()=>{closeDetalhe();openConteudoModal(id);};
   document.getElementById('det-del-btn').onclick=()=>deleteConteudo(id);
@@ -517,7 +555,7 @@ window.openRevisao=(id)=>{
   revisandoId=id;
   const c=conteudos.find(x=>x.id===id);if(!c)return;
   document.getElementById('rev-titulo').textContent=c.titulo;
-  document.getElementById('rev-materia').textContent=`${c.materia||''} · ${TIPO_LABEL[c.tipo]||'Misto'}`;
+  document.getElementById('rev-materia').textContent=c.materia||'';
   document.getElementById('rev-reveal-wrap').style.display='';
   document.getElementById('rev-conteudo').style.display='none';
   document.getElementById('rev-conteudo').innerHTML='';
@@ -528,8 +566,7 @@ window.openRevisao=(id)=>{
 window.revealConteudo=()=>{
   const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
   const parts=[];
-  if(c.conteudo&&c.conteudo.trim())parts.push(`<div style="margin-bottom:8px;"><div class="imp-label">Conteúdo</div><div class="det-body">${esc(c.conteudo)}</div></div>`);
-  if(c.formulas&&c.formulas.trim())parts.push(`<div style="margin-bottom:8px;"><div class="imp-label">Fórmulas</div><div class="det-body">${esc(c.formulas)}</div></div>`);
+  if(c.subconteudos&&c.subconteudos.trim())parts.push(`<div style="margin-bottom:8px;"><div class="imp-label">Subconteúdos</div><div class="det-body">${esc(c.subconteudos)}</div></div>`);
   if(c.anotacoes&&c.anotacoes.trim())parts.push(`<div style="margin-bottom:8px;"><div class="imp-label">Anotações</div><div class="det-body">${esc(c.anotacoes)}</div></div>`);
   document.getElementById('rev-conteudo').innerHTML=parts.length?parts.join(''):`<div class="det-empty" style="padding:8px 0;">Sem conteúdo salvo — avalie pela memória.</div>`;
   document.getElementById('rev-conteudo').style.display='';
