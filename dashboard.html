@@ -767,24 +767,25 @@ function drawShareImage(){
   x.fillText(total?`estudados em ${nMat} matéria${nMat===1?'':'s'}`:'nenhuma sessão ainda',M,366);
 
   // ── Pizza com sombra suave (dá profundidade sem pesar)
-  const cx=858,cy=268,R=128;
-  x.save();
-  x.shadowColor='rgba(0,0,0,0.45)';x.shadowBlur=34;x.shadowOffsetY=10;
+  // Círculo limpo: fatias encostadas, sem contorno e sem sombra — o traço escuro
+  // e o borrão da sombra faziam a borda parecer irregular em vez de redonda.
+  const cx=856,cy=262,R=116;
   if(!total){
     x.fillStyle='rgba(255,255,255,0.045)';
     x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.fill();
   }else{
     let ang=-Math.PI/2;
-    itens.forEach((it,k)=>{
+    itens.forEach(it=>{
       const sweep=it.pct/100*Math.PI*2;
-      x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,R,ang,ang+sweep);x.closePath();
-      x.fillStyle=it.cor;x.fill();
-      if(k===0)x.shadowColor='transparent';// sombra só no conjunto, não entre fatias
-      if(itens.length>1){x.strokeStyle='#0E1117';x.lineWidth=6;x.lineJoin='round';x.stroke();}
+      x.beginPath();
+      x.moveTo(cx,cy);
+      x.arc(cx,cy,R,ang,ang+sweep);
+      x.closePath();
+      x.fillStyle=it.cor;
+      x.fill();
       ang+=sweep;
     });
   }
-  x.restore();
 
   // ── Legenda em cartões: o próprio cartão se preenche na proporção da matéria
   let ly=470;
