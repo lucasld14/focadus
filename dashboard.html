@@ -24,6 +24,34 @@
 .today-panel{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.25rem;}
 @media(max-width:700px){.today-panel{grid-template-columns:1fr;}}
 
+/* Painel de distribuição por matéria (gráfico de pizza) */
+.share-panel{margin-bottom:1.25rem;}
+.pie-period{display:inline-flex;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;}
+.pie-per-btn{background:none;border:none;color:var(--muted);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .16s;}
+.pie-per-btn.on{background:rgba(198,154,58,.16);color:#C69A3A;}
+.pie-per-btn:hover:not(.on){color:var(--text);}
+.btn-share{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#C69A3A,#B8891F);border:none;color:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:transform .16s,box-shadow .16s,opacity .16s;box-shadow:0 4px 16px rgba(198,154,58,.35);}
+.btn-share:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(198,154,58,.5);}
+.btn-share:disabled{opacity:.6;cursor:default;transform:none;}
+.pie-wrap{display:flex;align-items:center;gap:2rem;padding:.75rem 0 .25rem;flex-wrap:wrap;}
+.pie-chart-box{position:relative;width:min(230px,60vw);aspect-ratio:1;flex-shrink:0;}
+.pie-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
+.pie-center-val{font-family:var(--font-d);font-size:30px;font-weight:700;letter-spacing:-1px;line-height:1;}
+.pie-center-lbl{font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.07em;}
+.pie-slice{transition:opacity .2s;}
+.pie-legend{flex:1;min-width:200px;display:flex;flex-direction:column;gap:9px;}
+.pie-leg-row{display:flex;align-items:center;gap:10px;font-size:13px;}
+.pie-leg-dot{width:11px;height:11px;border-radius:4px;flex-shrink:0;}
+.pie-leg-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pie-leg-val{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;}
+.pie-leg-pct{font-weight:600;font-size:13px;min-width:42px;text-align:right;font-variant-numeric:tabular-nums;}
+.pie-empty{color:var(--muted);font-size:13px;padding:2rem 0;text-align:center;width:100%;}
+@media(max-width:560px){
+  .pie-wrap{flex-direction:column;gap:1.25rem;}
+  .pie-chart-box{width:min(200px,65vw);}
+  .pie-legend{width:100%;}
+}
+
 .goal-ring-wrap{position:relative;width:110px;height:110px;flex-shrink:0;}
 .goal-ring-svg{width:110px;height:110px;transform:rotate(-90deg);}
 .goal-ring-track{fill:none;stroke:rgba(255,255,255,.05);stroke-width:8;}
@@ -144,6 +172,34 @@
     <div class="metric-card fade-up d2"><div class="metric-label">Semana</div><div class="metric-val" id="m-week">0h 0m</div><div class="metric-sub">últimos 7 dias</div></div>
     <div class="metric-card fade-up d3"><div class="metric-label">Este mês</div><div class="metric-val" id="m-month">0h 0m</div><div class="metric-sub" id="m-month-sub"></div></div>
     <div class="metric-card fade-up d4"><div class="metric-label">Total geral</div><div class="metric-val" id="m-total">0h 0m</div><div class="metric-sub">desde o início</div></div>
+  </div>
+
+  <!-- Distribuição por matéria (destaque + compartilhável) -->
+  <div class="panel share-panel fade-up d2" id="share-panel">
+    <div class="panel-header" style="flex-wrap:wrap;gap:10px;">
+      <span class="panel-title">Suas horas por matéria</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="pie-period">
+          <button class="pie-per-btn on" data-per="week" onclick="setPiePeriod('week',this)">Semana</button>
+          <button class="pie-per-btn" data-per="month" onclick="setPiePeriod('month',this)">Mês</button>
+          <button class="pie-per-btn" data-per="all" onclick="setPiePeriod('all',this)">Geral</button>
+        </div>
+        <button class="btn-share" onclick="sharePie()" id="btn-share">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          Compartilhar
+        </button>
+      </div>
+    </div>
+    <div class="pie-wrap">
+      <div class="pie-chart-box">
+        <svg viewBox="0 0 200 200" id="pie-svg" style="width:100%;height:100%;transform:rotate(-90deg);"></svg>
+        <div class="pie-center">
+          <div class="pie-center-val" id="pie-total">0h</div>
+          <div class="pie-center-lbl" id="pie-total-lbl">na semana</div>
+        </div>
+      </div>
+      <div class="pie-legend" id="pie-legend"></div>
+    </div>
   </div>
 
   <!-- Hoje: goal ring + sessions timeline -->
@@ -513,12 +569,157 @@ function updateAll(){
   buildTodayPanel();
   buildCalendar();
   renderSubjects();
+  renderPie();
   firstUpdate=false;
 }
 
 function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return`${h}h ${m}m`;}
 function gD(s){return s.startedAt.toDate?s.startedAt.toDate():new Date(s.startedAt);}
 function localStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+
+/* ═══ Gráfico de pizza por matéria (+ imagem compartilhável) ═══ */
+let piePeriod='week';
+const PERIODO_LBL={week:'na semana',month:'no mês',all:'no total'};
+const PERIODO_TIT={week:'Últimos 7 dias',month:'Este mês',all:'Desde o início'};
+function pieData(){
+  const n=now();
+  let inicio=null;
+  if(piePeriod==='week'){inicio=new Date(n);inicio.setHours(0,0,0,0);inicio.setDate(inicio.getDate()-6);}
+  else if(piePeriod==='month'){inicio=new Date(n.getFullYear(),n.getMonth(),1);}
+  const porMat={};
+  sessions.forEach(s=>{
+    if(!s.duration||!s.startedAt)return;
+    if(inicio&&gD(s)<inicio)return;
+    porMat[s.subjectId]=(porMat[s.subjectId]||0)+s.duration;
+  });
+  const total=Object.values(porMat).reduce((a,b)=>a+b,0);
+  const itens=Object.keys(porMat).map(id=>{
+    const sub=subjects.find(x=>x.id===id);
+    return{nome:sub?sub.name:'Sem matéria',cor:sub?sub.color:'#8D97A5',secs:porMat[id],pct:total?porMat[id]/total*100:0};
+  }).sort((a,b)=>b.secs-a.secs);
+  return{itens,total};
+}
+function renderPie(){
+  const{itens,total}=pieData();
+  const svg=document.getElementById('pie-svg');
+  const leg=document.getElementById('pie-legend');
+  if(!svg||!leg)return;
+  document.getElementById('pie-total').textContent=total?fmt(total):'0h';
+  document.getElementById('pie-total-lbl').textContent=PERIODO_LBL[piePeriod];
+  if(!total){
+    svg.innerHTML='<circle cx="100" cy="100" r="72" fill="none" stroke="var(--border)" stroke-width="26"/>';
+    leg.innerHTML='<div class="pie-empty">Nenhuma sessão neste período.<br>Estude para ver seu gráfico!</div>';
+    return;
+  }
+  // Fatias como arcos de um círculo (stroke-dasharray), sem biblioteca externa
+  const R=72,C=2*Math.PI*R;
+  let acc=0;
+  svg.innerHTML=itens.map(it=>{
+    const len=it.pct/100*C;
+    const el=`<circle class="pie-slice" cx="100" cy="100" r="${R}" fill="none" stroke="${it.cor}" stroke-width="26" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-acc}"/>`;
+    acc+=len;
+    return el;
+  }).join('');
+  leg.innerHTML=itens.map(it=>`<div class="pie-leg-row">
+    <span class="pie-leg-dot" style="background:${it.cor}"></span>
+    <span class="pie-leg-nome">${it.nome}</span>
+    <span class="pie-leg-val">${fmt(it.secs)}</span>
+    <span class="pie-leg-pct" style="color:${it.cor}">${Math.round(it.pct)}%</span>
+  </div>`).join('');
+}
+window.setPiePeriod=(p,btn)=>{
+  piePeriod=p;
+  document.querySelectorAll('.pie-per-btn').forEach(b=>b.classList.toggle('on',b===btn));
+  renderPie();
+};
+
+/* Gera uma imagem 1080x1080 pronta para postar (Instagram etc) */
+function drawShareImage(){
+  const{itens,total}=pieData();
+  const S=1080,cv=document.createElement('canvas');
+  cv.width=S;cv.height=S;
+  const x=cv.getContext('2d');
+  // Fundo
+  x.fillStyle='#0E1117';x.fillRect(0,0,S,S);
+  const g=x.createRadialGradient(S/2,S*0.42,40,S/2,S*0.42,S*0.75);
+  g.addColorStop(0,'rgba(198,154,58,0.14)');g.addColorStop(1,'rgba(198,154,58,0)');
+  x.fillStyle=g;x.fillRect(0,0,S,S);
+  // Marca
+  x.fillStyle='#F0EDE4';x.font='800 46px Manrope, system-ui, sans-serif';x.textAlign='center';
+  x.fillText('Focadus',S/2,96);
+  x.fillStyle='#8D97A5';x.font='500 24px "DM Sans", system-ui, sans-serif';
+  x.fillText(PERIODO_TIT[piePeriod],S/2,140);
+  // Rosca
+  const cx=S/2,cy=430,R=175,W=64;
+  if(!total){
+    x.strokeStyle='rgba(255,255,255,0.08)';x.lineWidth=W;
+    x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.stroke();
+  }else{
+    let ang=-Math.PI/2;
+    itens.forEach(it=>{
+      const sweep=it.pct/100*Math.PI*2;
+      x.strokeStyle=it.cor;x.lineWidth=W;
+      x.beginPath();x.arc(cx,cy,R,ang,ang+sweep);x.stroke();
+      ang+=sweep;
+    });
+  }
+  // Centro
+  x.fillStyle='#F0EDE4';x.font='700 66px Manrope, system-ui, sans-serif';x.textAlign='center';
+  x.fillText(total?fmt(total):'0h',cx,cy+10);
+  x.fillStyle='#8D97A5';x.font='500 22px "DM Sans", system-ui, sans-serif';
+  x.fillText('estudados',cx,cy+48);
+  // Legenda
+  let ly=690;
+  x.textAlign='left';
+  itens.slice(0,6).forEach(it=>{
+    x.fillStyle=it.cor;
+    x.beginPath();x.roundRect?x.roundRect(150,ly-16,20,20,6):x.rect(150,ly-16,20,20);x.fill();
+    x.fillStyle='#F0EDE4';x.font='500 27px "DM Sans", system-ui, sans-serif';
+    const nome=it.nome.length>22?it.nome.slice(0,21)+'…':it.nome;
+    x.fillText(nome,186,ly);
+    x.fillStyle='#8D97A5';x.font='500 25px "DM Sans", system-ui, sans-serif';x.textAlign='right';
+    x.fillText(`${fmt(it.secs)}  ·  ${Math.round(it.pct)}%`,S-150,ly);
+    x.textAlign='left';
+    ly+=52;
+  });
+  if(!itens.length){
+    x.fillStyle='#8D97A5';x.font='500 26px "DM Sans", system-ui, sans-serif';x.textAlign='center';
+    x.fillText('Nenhuma sessão neste período',S/2,ly);
+    x.textAlign='left';
+  }
+  // Rodapé
+  x.fillStyle='rgba(198,154,58,0.85)';x.font='600 24px "DM Sans", system-ui, sans-serif';x.textAlign='center';
+  x.fillText('focadus.com.br',S/2,S-64);
+  return cv;
+}
+window.sharePie=async()=>{
+  const btn=document.getElementById('btn-share');
+  if(btn.disabled)return;
+  const original=btn.innerHTML;
+  btn.disabled=true;btn.textContent='Gerando...';
+  try{
+    if(document.fonts&&document.fonts.ready)await document.fonts.ready;// garante as fontes no canvas
+    const cv=drawShareImage();
+    const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    if(!blob)throw new Error('não foi possível gerar a imagem');
+    const nome=`focadus-${piePeriod}-${localStr(now())}.png`;
+    const file=new File([blob],nome,{type:'image/png'});
+    // No celular abre o menu de compartilhar (Instagram, WhatsApp...); no PC baixa o arquivo
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'Meus estudos no Focadus'});
+    }else{
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=nome;a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),4000);
+    }
+  }catch(e){
+    if(e&&e.name==='AbortError')return;// usuário fechou o menu de compartilhar
+    console.error('[sharePie]',e);
+    bzAlert('Erro ao gerar imagem',(e.code||e.message||'desconhecido'),'danger');
+  }finally{
+    btn.disabled=false;btn.innerHTML=original;
+  }
+};
 
 
 function computeMetrics(animate=false){

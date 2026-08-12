@@ -151,10 +151,12 @@ select.modal-input{cursor:pointer;}
     </div>
   </div>
 
-  <div class="sec-title" style="margin-top:0;">Sua memória hoje</div>
-  <div class="mem-grid" id="mem-grid"></div>
-
   <div id="materias-wrap"></div>
+
+  <div id="mem-section" style="display:none;">
+    <div class="sec-title" style="margin-top:0;" id="mem-title">Sua memória hoje</div>
+    <div class="mem-grid" id="mem-grid"></div>
+  </div>
   <div id="hoje-wrap"></div>
   <div id="todos-wrap"></div>
 </main>
@@ -452,6 +454,11 @@ window.abrirMateria=(i)=>{materiaFiltro=_materiaNomes[i];render();window.scrollT
 window.voltarMaterias=()=>{materiaFiltro=null;render();window.scrollTo({top:0,behavior:'smooth'});};
 window.setView=(todos)=>{viewTodos=todos;materiaFiltro=null;render();};
 function renderMemGrid(){
+  // Só faz sentido dentro de uma matéria ou na lista de todos — na grade de cards os números já estão nos cards
+  const mostrar=(materiaFiltro!==null||viewTodos)&&conteudos.length>0;
+  document.getElementById('mem-section').style.display=mostrar?'':'none';
+  if(!mostrar)return;
+  document.getElementById('mem-title').textContent=materiaFiltro!==null?`Memória · ${materiaFiltro}`:'Sua memória hoje';
   const counts={risco:0,atencao:0,estavel:0,consolidado:0};
   visiveis().forEach(c=>{counts[statusOf(c).key]++;});// dentro de uma matéria, mostra só ela
   const defs=[
