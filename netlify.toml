@@ -1,6 +1,13 @@
+# O site é estático: o publish é a própria raiz. O npm install existe só por causa
+# da função de lembretes (.netlify/functions), que usa firebase-admin.
 [build]
 command = "npm install"
+publish = "."
 functions = ".netlify/functions"
 
+[build.environment]
+NODE_VERSION = "22"
+
+# nodejs18.x saiu de suporte e passou a ser recusado — 22 é a versão LTS atual.
 [functions."send-reminders"]
-runtime = "nodejs18.x"
+runtime = "nodejs22.x"
