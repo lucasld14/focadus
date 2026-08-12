@@ -723,85 +723,93 @@ function drawShareImage(){
     itens=itens.slice(0,5).concat([{nome:'Outras matérias',cor:'#8D97A5',secs:resto,pct:total?resto/total*100:0}]);
   }
   const dominante=raw.itens[0]?raw.itens[0].cor:'#C69A3A';
-  const S=1080,M=96,cv=document.createElement('canvas');// M = margem interna do conteúdo
+  const S=1080,M=88,cv=document.createElement('canvas');// M = margem do conteúdo
   cv.width=S;cv.height=S;
   const x=cv.getContext('2d');
   const SANS='"DM Sans", system-ui, sans-serif', DISP='Manrope, system-ui, sans-serif';
 
-  // ── Fundo: base escura + brilho suave na cor da matéria dominante
+  // ── Fundo: base escura + dois brilhos suaves, sem moldura (respira mais)
   x.fillStyle='#0E1117';x.fillRect(0,0,S,S);
-  const g=x.createRadialGradient(S/2,392,20,S/2,392,660);
-  g.addColorStop(0,dominante+'26');g.addColorStop(1,'rgba(14,17,23,0)');
+  let g=x.createRadialGradient(880,250,20,880,250,620);
+  g.addColorStop(0,dominante+'30');g.addColorStop(1,'rgba(14,17,23,0)');
   x.fillStyle=g;x.fillRect(0,0,S,S);
-  x.strokeStyle='rgba(255,255,255,0.06)';x.lineWidth=2;
-  rrect(x,32,32,S-64,S-64,52);x.stroke();
+  g=x.createRadialGradient(120,980,20,120,980,560);
+  g.addColorStop(0,'rgba(198,154,58,0.10)');g.addColorStop(1,'rgba(14,17,23,0)');
+  x.fillStyle=g;x.fillRect(0,0,S,S);
 
-  // ── Marca discreta no topo
+  // ── Topo: marca à esquerda, data à direita
   x.save();
-  x.translate(S/2-96,66);x.scale(1.1,1.1);
-  x.strokeStyle='#C69A3A';x.lineWidth=2.6;x.lineCap='round';
+  x.translate(M,60);x.scale(0.95,0.95);
+  x.strokeStyle='#C69A3A';x.lineWidth=2.8;x.lineCap='round';
   x.beginPath();
   x.moveTo(4,24);x.bezierCurveTo(9,24,13,6,18,6);x.bezierCurveTo(23,6,27,24,32,24);x.bezierCurveTo(37,24,41,6,46,6);
   x.stroke();
   x.fillStyle='#F4E3A7';x.beginPath();x.arc(46,6,4,0,Math.PI*2);x.fill();
   x.restore();
   x.textAlign='left';
-  x.fillStyle='#F0EDE4';x.font='800 32px '+DISP;
-  x.fillText('Foca',S/2-38,96);
-  x.fillStyle='#C69A3A';x.fillText('dus',S/2-38+x.measureText('Foca').width,96);
+  x.fillStyle='#F0EDE4';x.font='800 27px '+DISP;
+  x.fillText('Foca',M+56,86);
+  x.fillStyle='#C69A3A';x.fillText('dus',M+56+x.measureText('Foca').width,86);
+  x.textAlign='right';
+  x.fillStyle='#6F7885';x.font='500 20px '+SANS;
+  x.fillText(periodoRange(),S-M,86);
 
-  // ── Período
-  x.textAlign='center';
-  x.fillStyle='#F0EDE4';x.font='800 40px '+DISP;
-  x.fillText(PERIODO_TIT[piePeriod],S/2,162);
-  x.fillStyle='#7E8896';x.font='500 21px '+SANS;
-  x.fillText(periodoRange(),S/2,196);
+  // ── Bloco herói à esquerda + pizza à direita (composição editorial)
+  x.textAlign='left';
+  x.fillStyle='#C69A3A';x.font='700 21px '+DISP;
+  try{x.letterSpacing='3px';}catch(_){}
+  x.fillText(PERIODO_TIT[piePeriod].toUpperCase(),M,232);
+  try{x.letterSpacing='0px';}catch(_){}
+  x.fillStyle='#F7F6F3';x.font='800 92px '+DISP;
+  x.fillText(total?fmt(total):'0h 0m',M-4,326);
+  x.fillStyle='#7E8896';x.font='500 22px '+SANS;
+  const nMat=raw.itens.length;
+  x.fillText(total?`estudados em ${nMat} matéria${nMat===1?'':'s'}`:'nenhuma sessão ainda',M,366);
 
-  // ── Total: fica ACIMA do gráfico, com espaço próprio (não sobreposto)
-  x.fillStyle='#F5F4F1';x.font='800 70px '+DISP;
-  x.fillText(total?fmt(total):'0h 0m',S/2,278);
-  x.fillStyle='#7E8896';x.font='500 20px '+SANS;
-  x.fillText('estudados',S/2,312);
-
-  // ── Pizza: fatias cheias com corte limpo entre as matérias
-  const cx=S/2,cy=468,R=126;
+  // ── Pizza com sombra suave (dá profundidade sem pesar)
+  const cx=858,cy=268,R=128;
+  x.save();
+  x.shadowColor='rgba(0,0,0,0.45)';x.shadowBlur=34;x.shadowOffsetY=10;
   if(!total){
-    x.fillStyle='rgba(255,255,255,0.04)';
+    x.fillStyle='rgba(255,255,255,0.045)';
     x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.fill();
   }else{
     let ang=-Math.PI/2;
-    itens.forEach(it=>{
+    itens.forEach((it,k)=>{
       const sweep=it.pct/100*Math.PI*2;
       x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,R,ang,ang+sweep);x.closePath();
       x.fillStyle=it.cor;x.fill();
-      if(itens.length>1){// o traço na cor do fundo faz o corte entre as fatias
-        x.strokeStyle='#0E1117';x.lineWidth=6;x.lineJoin='round';x.stroke();
-      }
+      if(k===0)x.shadowColor='transparent';// sombra só no conjunto, não entre fatias
+      if(itens.length>1){x.strokeStyle='#0E1117';x.lineWidth=6;x.lineJoin='round';x.stroke();}
       ang+=sweep;
     });
   }
+  x.restore();
 
-  // ── Legenda: a barra mostra a porcentagem real da matéria
-  let ly=674;
+  // ── Legenda em cartões: o próprio cartão se preenche na proporção da matéria
+  let ly=470;
+  const larg=S-M*2, alt=62;
   if(!itens.length){
-    x.textAlign='center';x.fillStyle='#7E8896';x.font='500 25px '+SANS;
-    x.fillText(piePeriod==='hoje'?'Nenhuma sessão registrada hoje':'Nenhuma sessão neste período',S/2,ly);
+    x.fillStyle='rgba(255,255,255,0.03)';rrect(x,M,ly,larg,alt,18);x.fill();
+    x.textAlign='center';x.fillStyle='#6F7885';x.font='500 23px '+SANS;
+    x.fillText(piePeriod==='hoje'?'Comece pelo cronômetro para ver seu gráfico':'Nenhuma sessão neste período',S/2,ly+38);
   }else{
     itens.forEach(it=>{
+      x.fillStyle='rgba(255,255,255,0.035)';rrect(x,M,ly,larg,alt,18);x.fill();
+      x.save();rrect(x,M,ly,larg,alt,18);x.clip();
+      x.fillStyle=it.cor+'26';x.fillRect(M,ly,larg*it.pct/100,alt);// preenchimento = porcentagem real
+      x.fillStyle=it.cor;x.fillRect(M,ly,5,alt);// faixa da cor na borda
+      x.restore();
       x.textAlign='left';
-      x.fillStyle=it.cor;rrect(x,M,ly-15,13,13,4);x.fill();
-      x.fillStyle='#EDECE8';x.font='500 24px '+SANS;
-      const nome=it.nome.length>22?it.nome.slice(0,21)+'…':it.nome;
-      x.fillText(nome,M+25,ly);
+      x.fillStyle='#EFEEEA';x.font='600 24px '+SANS;
+      const nome=it.nome.length>20?it.nome.slice(0,19)+'…':it.nome;
+      x.fillText(nome,M+26,ly+39);
       x.textAlign='right';
-      x.fillStyle=it.cor;x.font='700 24px '+DISP;
-      x.fillText(Math.round(it.pct)+'%',S-M,ly);
+      x.fillStyle=it.cor;x.font='800 26px '+DISP;
+      x.fillText(Math.round(it.pct)+'%',S-M-24,ly+40);
       x.fillStyle='#7E8896';x.font='500 21px '+SANS;
-      x.fillText(fmt(it.secs),S-M-82,ly);
-      const larg=S-M*2;
-      x.fillStyle='rgba(255,255,255,0.06)';rrect(x,M,ly+11,larg,6,3);x.fill();
-      x.fillStyle=it.cor;rrect(x,M,ly+11,Math.max(4,larg*it.pct/100),6,3);x.fill();
-      ly+=46;
+      x.fillText(fmt(it.secs),S-M-110,ly+39);
+      ly+=alt+10;
     });
   }
 
@@ -810,19 +818,20 @@ function drawShareImage(){
   const nomeUser=(nomeEl?nomeEl.textContent:'').trim().split(/\s+/)[0]||'';
   const streakEl=document.getElementById('streak-big');
   const streak=parseInt(streakEl?streakEl.textContent:'0')||0;
-  x.strokeStyle='rgba(255,255,255,0.07)';x.lineWidth=1.5;
-  x.beginPath();x.moveTo(M,944);x.lineTo(S-M,944);x.stroke();
   x.textAlign='left';
-  x.fillStyle='#EDECE8';x.font='600 24px '+SANS;
-  if(nomeUser)x.fillText(nomeUser,M,988);
+  x.fillStyle='#EFEEEA';x.font='600 23px '+SANS;
+  if(nomeUser)x.fillText(nomeUser,M,996);
   if(streak>0){
-    x.textAlign='right';
-    x.fillStyle='#C69A3A';x.font='600 24px '+SANS;
-    x.fillText(streak+(streak===1?' dia seguido':' dias seguidos'),S-M,988);
+    const txt=streak+(streak===1?' dia seguido':' dias seguidos');
+    x.font='600 20px '+SANS;
+    const w=x.measureText(txt).width+34;
+    x.fillStyle='rgba(198,154,58,0.14)';rrect(x,S-M-w,976,w,32,16);x.fill();
+    x.textAlign='center';x.fillStyle='#D4A94A';
+    x.fillText(txt,S-M-w/2,998);
   }
   x.textAlign='center';
-  x.fillStyle='rgba(198,154,58,0.7)';x.font='600 21px '+SANS;
-  x.fillText('focadus.com.br',S/2,1026);
+  x.fillStyle='rgba(150,158,170,0.55)';x.font='500 19px '+SANS;
+  x.fillText('focadus.com.br',S/2,1042);
   return cv;
 }
 window.sharePie=async()=>{
