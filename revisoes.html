@@ -95,6 +95,8 @@
 .rate-btn:hover{transform:translateY(-2px);}
 .rate-btn .rate-t{font-size:14px;font-weight:600;}
 .rate-btn .rate-s{font-size:11px;color:var(--muted);margin-top:3px;}
+.rate-btn .rate-d{font-size:12px;font-weight:600;color:#C69A3A;margin-top:6px;}
+.rev-explica{font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px;padding:10px 13px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);}
 .rate-0:hover{border-color:var(--red);background:rgba(226,75,74,.08);}
 .rate-1:hover{border-color:var(--amber);background:rgba(239,159,39,.08);}
 .rate-2:hover{border-color:#1D9E75;background:rgba(29,158,117,.08);}
@@ -212,16 +214,17 @@ select.modal-input{cursor:pointer;}
     <div id="rev-rate" style="display:none;">
       <div class="imp-label" style="margin-top:16px;margin-bottom:2px;">Como foi lembrar disso?</div>
       <div class="rate-grid">
-        <button class="rate-btn rate-0" onclick="applyReview(0)"><div class="rate-t">Muito difícil</div><div class="rate-s">não lembrei</div></button>
-        <button class="rate-btn rate-1" onclick="applyReview(1)"><div class="rate-t">Difícil</div><div class="rate-s">com esforço</div></button>
-        <button class="rate-btn rate-2" onclick="applyReview(2)"><div class="rate-t">Bom</div><div class="rate-s">lembrei bem</div></button>
-        <button class="rate-btn rate-3" onclick="applyReview(3)"><div class="rate-t">Muito fácil</div><div class="rate-s">tranquilo</div></button>
+        <button class="rate-btn rate-0" onclick="applyReview(0)"><div class="rate-t">Muito difícil</div><div class="rate-s">não lembrei</div><div class="rate-d" id="rate-d-0"></div></button>
+        <button class="rate-btn rate-1" onclick="applyReview(1)"><div class="rate-t">Difícil</div><div class="rate-s">com esforço</div><div class="rate-d" id="rate-d-1"></div></button>
+        <button class="rate-btn rate-2" onclick="applyReview(2)"><div class="rate-t">Bom</div><div class="rate-s">lembrei bem</div><div class="rate-d" id="rate-d-2"></div></button>
+        <button class="rate-btn rate-3" onclick="applyReview(3)"><div class="rate-t">Muito fácil</div><div class="rate-s">tranquilo</div><div class="rate-d" id="rate-d-3"></div></button>
       </div>
+      <div id="rev-explica" class="rev-explica"></div>
       <div style="margin-top:14px;">
         <div class="imp-label" style="margin-bottom:6px;">Ou defina você mesmo a próxima revisão:</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:13px;color:var(--muted);">daqui a</span>
-          <input type="number" min="1" max="365" id="rev-manual-dias" class="modal-input" style="width:80px;" placeholder="dias">
+          <input type="number" min="1" max="180" id="rev-manual-dias" class="modal-input" style="width:80px;" placeholder="dias">
           <span style="font-size:13px;color:var(--muted);">dias</span>
           <button class="btn-secondary" onclick="applyManual()">Definir</button>
         </div>
@@ -264,6 +267,8 @@ import{getFirestore,doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,que
 const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
 let cu,subjects=[],conteudos=[];
+let cronoDias={};// {subjectId: [0..6]} — dias da semana em que a matéria aparece no cronograma (0=Seg)
+let horasPorMateria={};// {subjectId: segundos estudados}
 let editingId=null,detalheId=null,revisandoId=null;
 let materiaFiltro=null;// null = nenhuma matéria aberta
 let viewTodos=false;// false = grade de cards por matéria · true = lista de todos
@@ -280,7 +285,7 @@ function fmtBr(dstr){if(!dstr)return'';return new Date(dstr+'T00:00:00').toLocal
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 /* ───── MOTOR DE REVISÃO (SM-2 adaptado, conservador) ───── */
-const EASE_MIN=1.3,EASE_MAX=2.3,EASE_DEFAULT=1.7;
+const EASE_MIN=1.3,EASE_MAX=2.3,EASE_DEFAULT=1.7,MAX_INTERVALO=180;
 // q: 0 muito difícil · 1 difícil · 2 bom · 3 muito fácil
 function computeReview(item,q){
   let ease=(typeof item.ease==='number')?item.ease:EASE_DEFAULT;
@@ -291,12 +296,67 @@ function computeReview(item,q){
   if(q===0){ni=Math.max(1,Math.round(interval*0.4));reps=0;}// esqueceu: recua (gradual), volta a aprender
   else if(reps===0){ni=[0,2,4,7][q];reps=1;}// 1ª revisão bem-sucedida: valores base
   else{
-    const mult=q===1?1.2:(q===2?Math.min(ease,2.0):Math.min(ease+0.5,2.6));
+    let mult=q===1?1.15:(q===2?Math.min(ease,1.65):Math.min(ease+0.25,1.95));
+    // Amortecimento: quanto maior o intervalo, mais devagar ele cresce.
+    // Evita o salto de "30 dias" para "meio ano" que o espaçamento puro produz.
+    if(interval>30)mult=1+(mult-1)*0.80;
+    if(interval>90)mult=1+(mult-1)*0.65;
     ni=Math.max(interval+1,Math.round(interval*mult));// cresce, mas nunca menos que +1 dia
     reps=reps+1;
   }
-  ni=Math.min(ni,365);
+  ni=Math.min(ni,MAX_INTERVALO);
   return{ease:Math.round(ease*100)/100,interval:ni,reps};
+}
+/* ───── CALIBRAÇÃO: importância · carga da matéria · dedicação · cronograma ─────
+   Base científica do espaçamento (efeito de espaçamento / recuperação espaçada):
+   o intervalo ótimo tem um platô largo — variações de ~20% em torno do alvo têm
+   efeito pequeno na retenção. É essa folga que permite encaixar a revisão no dia
+   em que a matéria já está no cronograma, sem prejudicar a memorização. */
+const TOLERANCIA_ENCAIXE=0.20;
+function fatorImportancia(imp){return[1.15,1.15,1.07,1.00,0.93,0.85][Math.max(1,Math.min(5,imp||3))];}
+function fatorCarga(materia){
+  // Mais conteúdos na mesma matéria = mais carga por dia → espalha um pouco mais
+  const n=conteudos.filter(c=>(c.materia||'Sem matéria')===(materia||'Sem matéria')).length;
+  return 1+Math.min(0.25,Math.max(0,n-1)*0.02);
+}
+function fatorDedicacao(materia){
+  // Mais tempo dedicado à matéria = codificação mais forte → aguenta esperar um pouco mais
+  const ids=Object.keys(horasPorMateria);
+  if(!ids.length)return 1;
+  const sid=subjectIdDe(materia);
+  if(!sid||!horasPorMateria[sid])return 1;
+  const media=ids.reduce((a,k)=>a+horasPorMateria[k],0)/ids.length;
+  if(media<=0)return 1;
+  const razao=horasPorMateria[sid]/media;
+  return 1+Math.max(-0.12,Math.min(0.15,(razao-1)*0.12));
+}
+function diasCronogramaDe(materia){
+  const sid=subjectIdDe(materia);
+  return sid&&cronoDias[sid]&&cronoDias[sid].length?cronoDias[sid]:null;
+}
+function dayIdxDe(dstr){const d=new Date(dstr+'T00:00:00').getDay();return d===0?6:d-1;}// 0=Seg
+const DIA_NOME=['segunda','terça','quarta','quinta','sexta','sábado','domingo'];
+/* Calcula a próxima revisão já calibrada e encaixada no cronograma */
+function proximaRevisao(item,q){
+  const base=computeReview(item,q).interval;// base "limpa": é ela que alimenta o próximo cálculo
+  const f=fatorImportancia(item.importancia)*fatorCarga(item.materia)*fatorDedicacao(item.materia);
+  let dias=Math.max(1,Math.min(MAX_INTERVALO,Math.round(base*f)));
+  let encaixe=null;
+  const cron=diasCronogramaDe(item.materia);
+  if(cron){
+    const tol=Math.max(1,Math.round(dias*TOLERANCIA_ENCAIXE));
+    let melhor=null;
+    for(let d=1;d<=tol;d++){// procura do mais perto para o mais longe
+      for(const cand of [dias-d,dias+d]){
+        if(cand<1||cand>365||melhor!==null)continue;
+        if(cron.includes(dayIdxDe(addDays(todayStr(),cand))))melhor=cand;
+      }
+      if(melhor!==null)break;
+    }
+    if(cron.includes(dayIdxDe(addDays(todayStr(),dias)))){encaixe=dayIdxDe(addDays(todayStr(),dias));}
+    else if(melhor!==null){dias=melhor;encaixe=dayIdxDe(addDays(todayStr(),dias));}
+  }
+  return{dias,base,data:addDays(todayStr(),dias),encaixe};
 }
 function memoryLevel(item){
   const reps=item.reps||0;
@@ -357,8 +417,41 @@ onAuthStateChanged(auth,async user=>{
     const ss=await getDoc(doc(db,`users/${cu.uid}/data`,'subjects'));
     subjects=ss.exists()?ss.data().list||[]:[];
   }catch(e){subjects=[];}
+  await loadContexto();
   await loadConteudos();
 });
+
+/* Carrega cronograma e horas por matéria — usados para calibrar as revisões */
+async function loadContexto(){
+  try{
+    const snap=await getDoc(doc(db,`users/${cu.uid}/cronograma`,'template'));
+    cronoDias={};
+    if(snap.exists()){
+      const days=snap.data().days||{};
+      for(let i=0;i<7;i++){
+        (days[String(i)]||[]).forEach(bl=>{
+          if(!bl||!bl.subjectId)return;
+          (cronoDias[bl.subjectId]=cronoDias[bl.subjectId]||[]).push(i);
+        });
+      }
+      Object.keys(cronoDias).forEach(k=>{cronoDias[k]=[...new Set(cronoDias[k])].sort();});
+    }
+  }catch(e){console.warn('[cronograma]',e);cronoDias={};}
+  try{
+    const snap=await getDocs(collection(db,`users/${cu.uid}/sessions`));
+    horasPorMateria={};
+    snap.docs.forEach(d=>{
+      const s=d.data();
+      if(!s.subjectId||!s.duration)return;
+      horasPorMateria[s.subjectId]=(horasPorMateria[s.subjectId]||0)+s.duration;
+    });
+  }catch(e){console.warn('[sessions]',e);horasPorMateria={};}
+}
+function subjectIdDe(nomeMateria){
+  const n=String(nomeMateria||'').trim().toLowerCase();
+  const s=subjects.find(x=>String(x.name||'').trim().toLowerCase()===n);
+  return s?s.id:null;
+}
 
 function setAvatar(name,photo){const initials=name.trim().split(/\s+/).filter(Boolean).map(n=>n[0]).join('').toUpperCase().slice(0,2);const av=document.getElementById('avatar-el');if(photo)av.innerHTML=`<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;else av.textContent=initials;document.getElementById('user-name-el').textContent=name;}
 
@@ -654,31 +747,47 @@ window.revealConteudo=()=>{
   document.getElementById('rev-conteudo').style.display='';
   document.getElementById('rev-reveal-wrap').style.display='none';
   document.getElementById('rev-rate').style.display='';
+  // Mostra em cada botão quantos dias aquela resposta gera
+  let temEncaixe=false;
+  for(let q=0;q<4;q++){
+    const p=proximaRevisao(c,q);
+    if(p.encaixe!==null)temEncaixe=true;
+    const el=document.getElementById('rate-d-'+q);
+    if(el)el.textContent=p.dias===1?'1 dia':`${p.dias} dias`;
+  }
+  const cron=diasCronogramaDe(c.materia);
+  const partes=[];
+  partes.push('O intervalo se ajusta pela sua resposta, pela importância do conteúdo, pela quantidade de conteúdos da matéria e pelo quanto você estuda ela.');
+  if(cron)partes.push(`Como <b>${esc(c.materia)}</b> está no seu cronograma (${cron.map(d=>DIA_NOME[d]).join(', ')}), a data é encaixada nesses dias sempre que possível.`);
+  document.getElementById('rev-explica').innerHTML=partes.join(' ');
 };
-async function persistReview(c,interval,q){
+/* interval = base "limpa" que alimenta o próximo cálculo (sem os fatores de calibração,
+   senão eles se multiplicariam a cada revisão). dias = data realmente agendada. */
+async function persistReview(c,interval,dias,q,encaixe){
   const ease=q!=null?computeReview(c,q).ease:c.ease;
   const reps=q!=null?computeReview(c,q).reps:(c.reps||0);
-  const nextReview=addDays(todayStr(),interval);
-  const history=(c.history||[]).concat([{date:todayStr(),q:q==null?2:q,intervalAfter:interval}]);
+  const nextReview=addDays(todayStr(),dias);
+  const history=(c.history||[]).concat([{date:todayStr(),q:q==null?2:q,intervalAfter:dias}]);
   const patch={ease,reps,interval,nextReview,history};
   const backup={ease:c.ease,reps:c.reps,interval:c.interval,nextReview:c.nextReview,history:c.history};
   Object.assign(c,patch);
   try{
     await updateDoc(doc(db,`users/${cu.uid}/revisoes`,c.id),patch);
     closeRevisao();render();
-    showToastMsg(`Próxima revisão em ${interval} dia${interval===1?'':'s'} · ${fmtBr(nextReview)}`);
+    const extra=(encaixe!=null)?` · encaixado na ${DIA_NOME[encaixe]} de ${c.materia}`:'';
+    showToastMsg(`Próxima revisão em ${dias} dia${dias===1?'':'s'} · ${fmtBr(nextReview)}${extra}`);
   }catch(e){Object.assign(c,backup);bzAlert('Erro ao salvar revisão',(e.code||e.message||'desconhecido'),'danger');}
 }
 window.applyReview=(q)=>{
   const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
-  const r=computeReview(c,q);
-  persistReview(c,r.interval,q);
+  const p=proximaRevisao(c,q);
+  persistReview(c,p.base,p.dias,q,p.encaixe);
 };
 window.applyManual=()=>{
   const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
   const dias=parseInt(document.getElementById('rev-manual-dias').value);
-  if(!dias||dias<1||dias>365){bzAlert('Valor inválido','Digite um número de dias entre 1 e 365.','warn');return;}
-  persistReview(c,dias,null);
+  if(!dias||dias<1||dias>MAX_INTERVALO){bzAlert('Valor inválido',`Digite um número de dias entre 1 e ${MAX_INTERVALO}.`,'warn');return;}
+  persistReview(c,dias,dias,null,null);// override manual: vira a nova base também
 };
 window.closeRevisao=()=>document.getElementById('modal-revisao').classList.remove('open');
 
