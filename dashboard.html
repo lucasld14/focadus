@@ -705,14 +705,6 @@ function rrect(x,px,py,w,h,r){// roundRect manual (nem todo navegador tem ctx.ro
   x.arcTo(px,py,px+w,py,r);
   x.closePath();
 }
-/* Escolhe preto ou branco conforme o brilho da fatia, para o texto sempre ler bem */
-function corDoTextoSobre(cor){
-  const h=String(cor||'').replace('#','');
-  if(h.length<6)return'#0E1117';
-  const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
-  if([r,g,b].some(isNaN))return'#0E1117';
-  return(0.299*r+0.587*g+0.114*b)>145?'#0E1117':'#FFFFFF';
-}
 function periodoRange(){
   const n=now();
   const d=(dt)=>dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}).replace('.','');
@@ -783,13 +775,7 @@ function drawShareImage(){
       x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,R,ang,ang+sweep);x.closePath();
       x.fillStyle=it.cor;x.fill();
       if(itens.length>1){// o traço na cor do fundo faz o corte entre as fatias
-        x.strokeStyle='#0E1117';x.lineWidth=5;x.lineJoin='round';x.stroke();
-      }
-      if(it.pct>=11){// fatias grandes levam a porcentagem dentro
-        const meio=ang+sweep/2;
-        x.fillStyle=corDoTextoSobre(it.cor);
-        x.font='700 25px '+DISP;x.textAlign='center';
-        x.fillText(Math.round(it.pct)+'%',cx+Math.cos(meio)*R*0.62,cy+Math.sin(meio)*R*0.62+9);
+        x.strokeStyle='#0E1117';x.lineWidth=6;x.lineJoin='round';x.stroke();
       }
       ang+=sweep;
     });
