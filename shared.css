@@ -620,6 +620,7 @@ body::before{
   .main{padding:.9rem .75rem;padding-bottom:calc(5.5rem + env(safe-area-inset-bottom));}
   .nav-item span{display:none;}
   .nav-item{min-width:44px;padding:8px;}
+  .user-chip{min-width:44px;padding:8px;}/* acompanha os itens: são 7 abas + perfil na barra */
   .modal-box{padding:1.25rem;border-radius:18px;}
   .topbar-right{gap:6px;}
   .panel{padding:1rem;}
@@ -653,6 +654,7 @@ body::before{
   .page-title{font-size:18px;}
   .panel-header{gap:6px;}
   .nav-item{min-width:40px;padding:6px 4px;}
+  .user-chip{min-width:40px;padding:6px 4px;}
   /* Mantém 16px nos campos mesmo em 320px (anti-zoom iOS) */
   .modal-input,input,select,textarea{font-size:16px;}
 }

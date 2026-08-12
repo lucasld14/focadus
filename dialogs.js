@@ -159,3 +159,23 @@
     inject();
   }
 })();
+
+/* No celular a barra lateral vira barra inferior. Com 7 abas + perfil ela fica mais
+   larga que a tela e rola na horizontal — sem isso, a aba atual podia ficar fora de
+   vista. Traz a aba ativa para o centro assim que a página abre. */
+(function () {
+  function centralizarAbaAtiva() {
+    var barra = document.querySelector('.sidebar');
+    var ativo = document.querySelector('.sidebar .nav-item.active');
+    if (!barra || !ativo) return;
+    if (barra.scrollWidth <= barra.clientWidth) return; // cabe tudo, nada a fazer
+    var alvo = ativo.offsetLeft - (barra.clientWidth - ativo.offsetWidth) / 2;
+    barra.scrollTo({ left: Math.max(0, alvo), behavior: 'auto' });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', centralizarAbaAtiva);
+  } else {
+    centralizarAbaAtiva();
+  }
+  window.addEventListener('resize', centralizarAbaAtiva);
+})();
