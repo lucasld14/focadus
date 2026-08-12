@@ -634,62 +634,130 @@ window.setPiePeriod=(p,btn)=>{
 };
 
 /* Gera uma imagem 1080x1080 pronta para postar (Instagram etc) */
+function rrect(x,px,py,w,h,r){// roundRect manual (nem todo navegador tem ctx.roundRect)
+  x.beginPath();
+  x.moveTo(px+r,py);
+  x.arcTo(px+w,py,px+w,py+h,r);
+  x.arcTo(px+w,py+h,px,py+h,r);
+  x.arcTo(px,py+h,px,py,r);
+  x.arcTo(px,py,px+w,py,r);
+  x.closePath();
+}
+function periodoRange(){
+  const n=now();
+  const d=(dt)=>dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}).replace('.','');
+  if(piePeriod==='week'){const i=new Date(n);i.setDate(i.getDate()-6);return`${d(i)} — ${d(n)}`;}
+  if(piePeriod==='month')return n.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  return'Desde o início';
+}
 function drawShareImage(){
-  const{itens,total}=pieData();
+  const raw=pieData();
+  const total=raw.total;
+  // Agrupa o excedente em "Outras" para o layout nunca estourar
+  let itens=raw.itens;
+  if(itens.length>5){
+    const resto=itens.slice(5).reduce((a,b)=>a+b.secs,0);
+    itens=itens.slice(0,5).concat([{nome:'Outras matérias',cor:'#8D97A5',secs:resto,pct:total?resto/total*100:0}]);
+  }
+  const dominante=raw.itens[0]?raw.itens[0].cor:'#C69A3A';
   const S=1080,cv=document.createElement('canvas');
   cv.width=S;cv.height=S;
   const x=cv.getContext('2d');
-  // Fundo
+
+  // ── Fundo com brilho na cor da matéria dominante
   x.fillStyle='#0E1117';x.fillRect(0,0,S,S);
-  const g=x.createRadialGradient(S/2,S*0.42,40,S/2,S*0.42,S*0.75);
-  g.addColorStop(0,'rgba(198,154,58,0.14)');g.addColorStop(1,'rgba(198,154,58,0)');
+  const g=x.createRadialGradient(S/2,400,30,S/2,400,760);
+  g.addColorStop(0,dominante+'2e');g.addColorStop(1,'rgba(14,17,23,0)');
   x.fillStyle=g;x.fillRect(0,0,S,S);
-  // Marca
-  x.fillStyle='#F0EDE4';x.font='800 46px Manrope, system-ui, sans-serif';x.textAlign='center';
-  x.fillText('Focadus',S/2,96);
-  x.fillStyle='#8D97A5';x.font='500 24px "DM Sans", system-ui, sans-serif';
-  x.fillText(PERIODO_TIT[piePeriod],S/2,140);
-  // Rosca
-  const cx=S/2,cy=430,R=175,W=64;
+  // Moldura sutil
+  x.strokeStyle='rgba(255,255,255,0.07)';x.lineWidth=2;
+  rrect(x,36,36,S-72,S-72,44);x.stroke();
+
+  // ── Cabeçalho: logo (onda) + marca
+  x.save();
+  x.translate(S/2-118,74);x.scale(1.35,1.35);
+  x.strokeStyle='#C69A3A';x.lineWidth=2.5;x.lineCap='round';
+  x.beginPath();
+  x.moveTo(4,24);x.bezierCurveTo(9,24,13,6,18,6);x.bezierCurveTo(23,6,27,24,32,24);x.bezierCurveTo(37,24,41,6,46,6);
+  x.stroke();
+  x.fillStyle='#F4E3A7';x.beginPath();x.arc(46,6,4,0,Math.PI*2);x.fill();
+  x.restore();
+  x.textAlign='left';
+  x.fillStyle='#F0EDE4';x.font='800 44px Manrope, system-ui, sans-serif';
+  x.fillText('Foca',S/2-30,112);
+  const wFoca=x.measureText('Foca').width;
+  x.fillStyle='#C69A3A';x.fillText('dus',S/2-30+wFoca,112);
+
+  // ── Título do período
+  x.textAlign='center';
+  x.fillStyle='#F0EDE4';x.font='700 34px Manrope, system-ui, sans-serif';
+  x.fillText(PERIODO_TIT[piePeriod],S/2,182);
+  x.fillStyle='#8D97A5';x.font='500 23px "DM Sans", system-ui, sans-serif';
+  x.fillText(periodoRange(),S/2,218);
+
+  // ── Rosca (com pequenos vãos entre as fatias)
+  const cx=S/2,cy=452,R=158,W=56;
+  x.lineCap='butt';
   if(!total){
-    x.strokeStyle='rgba(255,255,255,0.08)';x.lineWidth=W;
+    x.strokeStyle='rgba(255,255,255,0.07)';x.lineWidth=W;
     x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.stroke();
   }else{
+    const vao=itens.length>1?0.022:0;// radianos
     let ang=-Math.PI/2;
     itens.forEach(it=>{
       const sweep=it.pct/100*Math.PI*2;
-      x.strokeStyle=it.cor;x.lineWidth=W;
-      x.beginPath();x.arc(cx,cy,R,ang,ang+sweep);x.stroke();
+      if(sweep>vao){
+        x.strokeStyle=it.cor;x.lineWidth=W;
+        x.beginPath();x.arc(cx,cy,R,ang+vao/2,ang+sweep-vao/2);x.stroke();
+      }
       ang+=sweep;
     });
   }
   // Centro
-  x.fillStyle='#F0EDE4';x.font='700 66px Manrope, system-ui, sans-serif';x.textAlign='center';
-  x.fillText(total?fmt(total):'0h',cx,cy+10);
+  x.fillStyle='#F0EDE4';x.font='800 74px Manrope, system-ui, sans-serif';
+  x.fillText(total?fmt(total):'0h 0m',cx,cy+14);
   x.fillStyle='#8D97A5';x.font='500 22px "DM Sans", system-ui, sans-serif';
-  x.fillText('estudados',cx,cy+48);
-  // Legenda
-  let ly=690;
-  x.textAlign='left';
-  itens.slice(0,6).forEach(it=>{
-    x.fillStyle=it.cor;
-    x.beginPath();x.roundRect?x.roundRect(150,ly-16,20,20,6):x.rect(150,ly-16,20,20);x.fill();
-    x.fillStyle='#F0EDE4';x.font='500 27px "DM Sans", system-ui, sans-serif';
-    const nome=it.nome.length>22?it.nome.slice(0,21)+'…':it.nome;
-    x.fillText(nome,186,ly);
-    x.fillStyle='#8D97A5';x.font='500 25px "DM Sans", system-ui, sans-serif';x.textAlign='right';
-    x.fillText(`${fmt(it.secs)}  ·  ${Math.round(it.pct)}%`,S-150,ly);
-    x.textAlign='left';
-    ly+=52;
-  });
+  x.fillText('estudados',cx,cy+54);
+
+  // ── Legenda
+  let ly=706;
   if(!itens.length){
-    x.fillStyle='#8D97A5';x.font='500 26px "DM Sans", system-ui, sans-serif';x.textAlign='center';
-    x.fillText('Nenhuma sessão neste período',S/2,ly);
-    x.textAlign='left';
+    x.fillStyle='#8D97A5';x.font='500 26px "DM Sans", system-ui, sans-serif';
+    x.fillText('Nenhuma sessão neste período',S/2,ly+20);
+  }else{
+    itens.forEach(it=>{
+      x.textAlign='left';
+      x.fillStyle=it.cor;rrect(x,132,ly-17,20,20,6);x.fill();
+      x.fillStyle='#F0EDE4';x.font='500 26px "DM Sans", system-ui, sans-serif';
+      const nome=it.nome.length>24?it.nome.slice(0,23)+'…':it.nome;
+      x.fillText(nome,168,ly);
+      x.textAlign='right';
+      x.fillStyle=it.cor;x.font='600 26px "DM Sans", system-ui, sans-serif';
+      x.fillText(`${Math.round(it.pct)}%`,S-132,ly);
+      x.fillStyle='#8D97A5';x.font='500 24px "DM Sans", system-ui, sans-serif';
+      x.fillText(fmt(it.secs),S-206,ly);
+      ly+=48;
+    });
   }
-  // Rodapé
-  x.fillStyle='rgba(198,154,58,0.85)';x.font='600 24px "DM Sans", system-ui, sans-serif';x.textAlign='center';
-  x.fillText('focadus.com.br',S/2,S-64);
+
+  // ── Rodapé: nome + sequência + site
+  const nomeEl=document.getElementById('user-name-el');
+  const nomeUser=(nomeEl?nomeEl.textContent:'').trim().split(/\s+/)[0]||'';
+  const streakEl=document.getElementById('streak-big');
+  const streak=parseInt(streakEl?streakEl.textContent:'0')||0;
+  x.strokeStyle='rgba(255,255,255,0.08)';x.lineWidth=1.5;
+  x.beginPath();x.moveTo(132,952);x.lineTo(S-132,952);x.stroke();
+  x.textAlign='left';
+  x.fillStyle='#F0EDE4';x.font='600 25px "DM Sans", system-ui, sans-serif';
+  if(nomeUser)x.fillText(nomeUser,132,996);
+  if(streak>0){
+    x.textAlign='right';
+    x.fillStyle='#C69A3A';x.font='600 25px "DM Sans", system-ui, sans-serif';
+    x.fillText(`${streak} dia${streak===1?'':'s'} seguido${streak===1?'':'s'}`,S-132,996);
+  }
+  x.textAlign='center';
+  x.fillStyle='rgba(198,154,58,0.75)';x.font='600 22px "DM Sans", system-ui, sans-serif';
+  x.fillText('focadus.com.br',S/2,1032);
   return cv;
 }
 window.sharePie=async()=>{
