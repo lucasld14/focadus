@@ -128,6 +128,16 @@
   .wnav-today{font-size:11px;padding:4px 10px;}
 }
 @media(max-width:380px){.day-col{min-width:160px;}.crono-summary{grid-template-columns:1fr;}.crono-sum-val{font-size:18px;}}
+/* Em telas de toque não existe hover: os botões precisam ficar sempre visíveis,
+   senão mover/remover ficam inacessíveis no celular. */
+@media(hover:none){
+  .block-del,.block-move{opacity:1;}
+  .block-del{width:20px;height:20px;}
+  .block-move{width:20px;height:20px;right:29px;}
+  .block-top{padding-right:52px;}
+  .block-check{width:18px;height:18px;}
+  .move-opt{padding:9px 10px;}
+}
 
 [data-theme="light"] .day-col{background:rgba(0,0,0,.025);}
 [data-theme="light"] .block-form{background:rgba(0,0,0,.03);}
@@ -592,7 +602,7 @@ window.resetData=async()=>{
   try{
     const{collection,getDocs,deleteDoc,doc:fdoc,setDoc}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
     const uid=cu.uid;
-    for(const sub of ['sessions','cronograma','notes']){
+    for(const sub of ['sessions','cronograma','notes','revisoes']){
       const snap=await getDocs(collection(db,`users/${uid}/${sub}`));
       await Promise.all(snap.docs.map(d=>deleteDoc(d.ref)));
     }
@@ -616,7 +626,7 @@ window.deleteAccount=async()=>{
         const{collection,getDocs,deleteDoc,doc:fdoc,writeBatch}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
         const uid=cu.uid;
         const batch=writeBatch(db);
-        const subCollections=['sessions','exams','cronograma','notes'];
+        const subCollections=['sessions','exams','cronograma','notes','revisoes'];
         for(const subColl of subCollections){
           const snap=await getDocs(collection(db,`users/${uid}/${subColl}`));
           snap.docs.forEach(d=>batch.delete(d.ref));
