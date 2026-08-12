@@ -55,6 +55,25 @@
 .block-del{position:absolute;top:5px;right:5px;width:16px;height:16px;border-radius:4px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s;}
 .block-item:hover .block-del{opacity:1;}
 .block-del:hover{background:rgba(255,80,80,.2);color:#ff5050;}
+/* Mover para outro dia */
+.block-move{position:absolute;top:5px;right:25px;width:16px;height:16px;border-radius:4px;background:transparent;border:none;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s,color .15s;padding:0;}
+.block-item:hover .block-move{opacity:1;}
+.block-move:hover{background:rgba(198,154,58,.22);color:#C69A3A;}
+.move-pop{position:absolute;z-index:60;top:24px;right:4px;background:var(--surface);border:1px solid var(--border-hover);border-radius:10px;padding:5px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:2px;min-width:96px;}
+.move-pop-tit{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:3px 7px 4px;}
+.move-opt{background:none;border:none;color:var(--text);text-align:left;font-size:12px;font-family:inherit;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .13s;}
+.move-opt:hover{background:rgba(198,154,58,.16);color:#C69A3A;}
+.move-opt.atual{color:var(--muted);cursor:default;}
+.move-opt.atual:hover{background:none;color:var(--muted);}
+/* Marcar que estudou */
+.block-check{width:15px;height:15px;border-radius:5px;border:1.5px solid var(--border-hover);background:transparent;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;transition:all .15s;}
+.block-check:hover{border-color:#1D9E75;}
+.block-check svg{opacity:0;transition:opacity .12s;width:9px;height:9px;}
+.block-check.feito{background:#1D9E75;border-color:#1D9E75;}
+.block-check.feito svg{opacity:1;}
+.block-top{display:flex;align-items:center;gap:7px;margin-bottom:3px;padding-right:44px;}
+.block-item.feito{opacity:.62;}
+.block-item.feito .block-name{text-decoration:line-through;text-decoration-color:rgba(255,255,255,.35);}
 
 /* Add button */
 .add-block-btn{width:100%;border:1px dashed rgba(255,255,255,.12);border-radius:8px;background:none;color:var(--muted);font-size:12px;padding:7px;cursor:pointer;font-family:var(--font);transition:all .18s;display:flex;align-items:center;justify-content:center;gap:5px;}
@@ -213,6 +232,7 @@ const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Prov
 let cu,subjects=[],weekOffset=0;
 let daysData={0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
 let actualData={};
+let checksData={};// {"AAAA-MM-DD_<idDoBloco>": true} — o que já foi estudado, por data real
 
 const DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 let activeFormEl=null;
@@ -272,6 +292,12 @@ async function loadWeek(){
       daysData[i]=(stored.days&&stored.days[String(i)])||[];
     }
 
+    // Marcações de "já estudei" (por data real)
+    try{
+      const ckSnap=await getDoc(doc(db,`users/${cu.uid}/cronograma`,'checks'));
+      checksData=ckSnap.exists()?ckSnap.data()||{}:{};
+    }catch(e){console.warn('checks',e);checksData={};}
+
     // Sessões reais da semana navegada (para mostrar progresso)
     const start=new Date(wdays[0]);
     const end=new Date(wdays[6]);end.setHours(23,59,59,999);
@@ -311,6 +337,55 @@ function getActual(subjectId,dayIdx){
   return actualData[subjectId+'_'+dayIdx]||0;
 }
 
+/* ───── Marcar como estudado (por data real, não pelo template) ───── */
+function dateKey(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function checkKey(dStr,bl,bi){return dStr+'_'+(bl.id||(bl.subjectId+'_'+bi));}
+let checksTimer=null;
+function saveChecks(){
+  clearTimeout(checksTimer);
+  checksTimer=setTimeout(async()=>{
+    // Descarta marcações com mais de 120 dias para o documento não crescer sem limite
+    const limite=new Date();limite.setDate(limite.getDate()-120);
+    const corte=dateKey(limite);
+    Object.keys(checksData).forEach(k=>{if(k.slice(0,10)<corte)delete checksData[k];});
+    try{await setDoc(doc(db,`users/${cu.uid}/cronograma`,'checks'),checksData);}
+    catch(e){console.error('saveChecks',e);bzAlert('Erro ao salvar','Não foi possível marcar como estudado: '+(e.code||e.message||'desconhecido'),'danger');}
+  },500);
+}
+window.toggleFeito=function(key,e){
+  if(e)e.stopPropagation();
+  if(checksData[key])delete checksData[key];else checksData[key]=true;
+  saveChecks();
+  renderBoard();
+};
+
+/* ───── Mover bloco para outro dia ───── */
+function fecharMover(){document.querySelectorAll('.move-pop').forEach(p=>p.remove());}
+window.abrirMover=function(dayIdx,blockIdx,e){
+  e.stopPropagation();
+  const jaAberto=e.currentTarget.parentElement.querySelector('.move-pop');
+  fecharMover();closeForm();
+  if(jaAberto)return;// clicar de novo fecha
+  const pop=document.createElement('div');
+  pop.className='move-pop';
+  pop.onclick=ev=>ev.stopPropagation();
+  pop.innerHTML=`<div class="move-pop-tit">Mover para</div>`+DIAS.map((nome,d)=>
+    d===dayIdx?`<button class="move-opt atual" disabled>${nome} (aqui)</button>`
+              :`<button class="move-opt" onclick="moverBloco(${dayIdx},${blockIdx},${d})">${nome}</button>`
+  ).join('');
+  e.currentTarget.parentElement.appendChild(pop);
+};
+window.moverBloco=function(dayIdx,blockIdx,destino){
+  const bl=daysData[dayIdx][blockIdx];
+  if(!bl)return;
+  daysData[dayIdx].splice(blockIdx,1);
+  daysData[destino]=daysData[destino]||[];
+  daysData[destino].push(bl);
+  fecharMover();
+  save();
+  renderBoard();
+};
+
 function renderBoard(){
   const wdays=getWeekDays(weekOffset);
   const board=document.getElementById('board');
@@ -329,17 +404,24 @@ function renderBoard(){
     col.className='day-col'+(tod?' is-today':'');
     col.dataset.day=i;
 
+    const dStr=dateKey(d);
     const blocksHtml=blocks.map((bl,bi)=>{
       const sub=subjects.find(x=>x.id===bl.subjectId)||{name:bl.name||'?',color:'#C69A3A'};
       const actSecs=getActual(bl.subjectId,i);
       const bg=esc(sub.color)+'1a';
-      return `<div class="block-item" style="background:${bg}" onclick="openEditBlock(${i},${bi},event)">
+      const ck=checkKey(dStr,bl,bi);
+      const feito=!!checksData[ck];
+      return `<div class="block-item${feito?' feito':''}" style="background:${bg}" onclick="openEditBlock(${i},${bi},event)">
         <div class="block-color-bar" style="background:${esc(sub.color)}"></div>
-        <div class="block-name" title="${esc(sub.name)}">${esc(sub.name)}</div>
+        <div class="block-top">
+          <button class="block-check${feito?' feito':''}" onclick="toggleFeito('${esc(ck)}',event)" title="${feito?'Marcado como estudado':'Marcar como estudado'}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+          <div class="block-name" title="${esc(sub.name)}" style="padding-right:0;margin-bottom:0;">${esc(sub.name)}</div>
+        </div>
         <div class="block-hours">
           <span class="block-hours-val">${fmtHm(bl.mins||0)}</span>
           ${actSecs?`<span class="block-actual">· ${fmtH(actSecs)} feito</span>`:''}
         </div>
+        <button class="block-move" onclick="abrirMover(${i},${bi},event)" title="Mover para outro dia"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/><polyline points="15 18 21 12 15 6"/></svg></button>
         <button class="block-del" onclick="removeBlock(${i},${bi},event)" title="Remover">×</button>
       </div>`;
     }).join('');
@@ -443,7 +525,7 @@ window.pickSubj=function(dayIdx,sid,el){
 };
 
 window.showAddForm=function(dayIdx){openForm(dayIdx,null);};
-window.openEditBlock=function(dayIdx,blockIdx,e){if(e.target.classList.contains('block-del'))return;openForm(dayIdx,blockIdx);};
+window.openEditBlock=function(dayIdx,blockIdx,e){if(e.target.closest('button')||e.target.closest('.move-pop'))return;fecharMover();openForm(dayIdx,blockIdx);};
 window.removeBlock=function(dayIdx,blockIdx,e){e.stopPropagation();daysData[dayIdx].splice(blockIdx,1);save();renderBoard();};
 window.closeForm=closeForm;
 
@@ -474,6 +556,11 @@ document.addEventListener('click',e=>{
   if(e.target.classList.contains('add-block-btn'))return;
   if(e.target.classList.contains('block-item')||e.target.closest('.block-item'))return;
   closeForm();
+});
+// Fecha o menu de mover ao clicar fora
+document.addEventListener('click',e=>{
+  if(e.target.closest('.move-pop')||e.target.closest('.block-move'))return;
+  fecharMover();
 });
 
 window.navWeek=function(dir){weekOffset+=dir;closeForm();loadWeek();};
