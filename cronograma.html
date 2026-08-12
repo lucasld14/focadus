@@ -43,6 +43,23 @@
 .day-total{font-size:10px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;}
 .day-dots{display:none;}/* só aparece no celular, onde o quadro vira carrossel */
 
+/* Barra do padrão semanal */
+.padrao-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:11px 16px;margin-bottom:1.25rem;}
+.padrao-info{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);min-width:0;}
+.padrao-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+.padrao-dot.editada{background:#C08B2E;}
+.padrao-acoes{display:flex;gap:8px;flex-wrap:wrap;}
+.padrao-btn{background:rgba(198,154,58,.1);border:1px solid rgba(198,154,58,.28);color:var(--accent);border-radius:10px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .18s;white-space:nowrap;}
+.padrao-btn:hover{background:rgba(198,154,58,.2);}
+.padrao-btn.ghost{background:none;border-color:var(--border-hover);color:var(--muted);}
+.padrao-btn.ghost:hover{color:var(--text);border-color:var(--text-2);background:rgba(255,255,255,.04);}
+@media(max-width:600px){
+  .padrao-bar{padding:12px 14px;}
+  .padrao-info{font-size:12.5px;width:100%;}
+  .padrao-acoes{width:100%;}
+  .padrao-btn{flex:1;padding:10px 12px;}
+}
+
 /* Blocks */
 .blocks-list{display:flex;flex-direction:column;gap:6px;min-height:4px;}
 .block-item{border-radius:10px;padding:8px 9px;cursor:pointer;position:relative;transition:transform .15s,box-shadow .15s;animation:blockIn .25s cubic-bezier(.22,1,.36,1) both;}
@@ -207,6 +224,18 @@
     </div>
   </div>
 
+  <!-- Padrão da semana -->
+  <div class="padrao-bar">
+    <div class="padrao-info" id="padrao-info">
+      <span class="padrao-dot" id="padrao-dot"></span>
+      <span id="padrao-texto">Esta semana segue o seu padrão</span>
+    </div>
+    <div class="padrao-acoes">
+      <button class="padrao-btn" onclick="salvarComoPadrao()" title="Grava a semana atual como o modelo das próximas">Salvar como padrão</button>
+      <button class="padrao-btn ghost" id="btn-voltar-padrao" onclick="voltarAoPadrao()" title="Descarta as mudanças desta semana" style="display:none;">Voltar ao padrão</button>
+    </div>
+  </div>
+
   <div class="crono-summary">
     <div class="crono-sum-card">
       <div class="crono-sum-label">Planejado</div>
@@ -260,7 +289,7 @@
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{initializeAppCheck,ReCaptchaV3Provider}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
 import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import{getFirestore,doc,getDoc,setDoc,collection,query,where,getDocs,Timestamp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,doc,getDoc,setDoc,deleteDoc,collection,query,where,getDocs,Timestamp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
 
@@ -269,6 +298,7 @@ let daysData={0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
 let actualData={};
 let checksData={};// {"AAAA-MM-DD_<idDoBloco>": true} — o que já foi estudado, por data real
 let primeiraCarga=true;
+let semanaPersonalizada=false;// true = esta semana tem um plano proprio, diferente do padrao
 
 const DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 let activeFormEl=null;
@@ -321,12 +351,17 @@ async function loadWeek(){
   document.getElementById('week-label').textContent=`${fmt(wdays[0])} – ${fmt(wdays[6])}`;
 
   try{
-    // Plano fixo — sempre carrega o template (mesmo para todas as semanas)
-    const planSnap=await getDoc(doc(db,`users/${cu.uid}/cronograma`,'template'));
-    const stored=planSnap.exists()?planSnap.data():{};
+    // Primeiro procura um plano só desta semana; se não houver, usa o padrão.
+    // Assim editar uma semana não mexe nas outras, e as futuras já nascem com o padrão.
+    const semanaSnap=await getDoc(doc(db,`users/${cu.uid}/cronograma`,semanaId()));
+    semanaPersonalizada=semanaSnap.exists();
+    const fonte=semanaPersonalizada
+      ? semanaSnap.data()
+      : (await getDoc(doc(db,`users/${cu.uid}/cronograma`,'template'))).data()||{};
     for(let i=0;i<7;i++){
-      daysData[i]=(stored.days&&stored.days[String(i)])||[];
+      daysData[i]=(fonte.days&&fonte.days[String(i)])||[];
     }
+    atualizarBarraPadrao();
 
     // Marcações de "já estudei" (por data real)
     try{
@@ -360,16 +395,55 @@ async function loadWeek(){
   }
 }
 
+/* ───── Padrão semanal ─────
+   `template` guarda o padrão. Cada semana editada vira um documento próprio
+   (semana_AAAA-MM-DD, pela segunda-feira), então mexer numa semana não afeta
+   as outras e as futuras continuam nascendo com o padrão. */
+function semanaId(){
+  const seg=getWeekStart(weekOffset);
+  return`semana_${seg.getFullYear()}-${String(seg.getMonth()+1).padStart(2,'0')}-${String(seg.getDate()).padStart(2,'0')}`;
+}
+function diasAtuais(){const days={};for(let i=0;i<7;i++)days[String(i)]=daysData[i];return days;}
+function atualizarBarraPadrao(){
+  const txt=document.getElementById('padrao-texto');
+  const dot=document.getElementById('padrao-dot');
+  const btn=document.getElementById('btn-voltar-padrao');
+  if(!txt)return;
+  txt.textContent=semanaPersonalizada
+    ? 'Esta semana foi alterada só para ela'
+    : 'Esta semana segue o seu padrão';
+  dot.classList.toggle('editada',semanaPersonalizada);
+  btn.style.display=semanaPersonalizada?'':'none';
+}
 let saveTimer=null;
 function save(){
   clearTimeout(saveTimer);
+  semanaPersonalizada=true;atualizarBarraPadrao();// a edição vale só para esta semana
   saveTimer=setTimeout(async()=>{
-    // Sempre salva no template fixo
-    const days={};
-    for(let i=0;i<7;i++) days[String(i)]=daysData[i];
-    try{await setDoc(doc(db,`users/${cu.uid}/cronograma`,'template'),{days});}catch(e){console.error('save cronograma',e);bzAlert('Erro ao salvar','Não foi possível salvar o cronograma: '+(e.code||e.message||'desconhecido'),'danger');}
+    try{await setDoc(doc(db,`users/${cu.uid}/cronograma`,semanaId()),{days:diasAtuais()});}
+    catch(e){console.error('save cronograma',e);bzAlert('Erro ao salvar','Não foi possível salvar o cronograma: '+(e.code||e.message||'desconhecido'),'danger');}
   },700);
 }
+window.salvarComoPadrao=function(){
+  bzConfirm('Salvar como padrão','As próximas semanas passarão a começar com este cronograma. As semanas que você já alterou continuam como estão.','info',async()=>{
+    try{
+      await setDoc(doc(db,`users/${cu.uid}/cronograma`,'template'),{days:diasAtuais()});
+      // Esta semana passa a ser igual ao padrão: não precisa mais de cópia própria
+      await deleteDoc(doc(db,`users/${cu.uid}/cronograma`,semanaId())).catch(()=>{});
+      semanaPersonalizada=false;atualizarBarraPadrao();
+      bzAlert('Padrão salvo','Este cronograma agora é o seu padrão semanal.','info');
+    }catch(e){bzAlert('Erro ao salvar padrão',(e.code||e.message||'desconhecido'),'danger');}
+  });
+};
+window.voltarAoPadrao=function(){
+  bzConfirm('Voltar ao padrão','As alterações desta semana serão descartadas e ela voltará ao seu cronograma padrão.','danger',async()=>{
+    try{
+      clearTimeout(saveTimer);// não deixa um salvamento pendente recriar a semana
+      await deleteDoc(doc(db,`users/${cu.uid}/cronograma`,semanaId()));
+      await loadWeek();
+    }catch(e){bzAlert('Erro ao voltar ao padrão',(e.code||e.message||'desconhecido'),'danger');}
+  });
+};
 
 function getActual(subjectId,dayIdx){
   return actualData[subjectId+'_'+dayIdx]||0;

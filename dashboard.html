@@ -705,6 +705,14 @@ function rrect(x,px,py,w,h,r){// roundRect manual (nem todo navegador tem ctx.ro
   x.arcTo(px,py,px+w,py,r);
   x.closePath();
 }
+/* Escolhe preto ou branco conforme o brilho da fatia, para o texto sempre ler bem */
+function corDoTextoSobre(cor){
+  const h=String(cor||'').replace('#','');
+  if(h.length<6)return'#0E1117';
+  const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  if([r,g,b].some(isNaN))return'#0E1117';
+  return(0.299*r+0.587*g+0.114*b)>145?'#0E1117':'#FFFFFF';
+}
 function periodoRange(){
   const n=now();
   const d=(dt)=>dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}).replace('.','');
@@ -752,60 +760,62 @@ function drawShareImage(){
 
   // ── Período
   x.textAlign='center';
-  x.fillStyle='#F0EDE4';x.font='800 46px '+DISP;
-  x.fillText(PERIODO_TIT[piePeriod],S/2,176);
-  x.fillStyle='#7E8896';x.font='500 22px '+SANS;
-  x.fillText(periodoRange(),S/2,212);
+  x.fillStyle='#F0EDE4';x.font='800 40px '+DISP;
+  x.fillText(PERIODO_TIT[piePeriod],S/2,162);
+  x.fillStyle='#7E8896';x.font='500 21px '+SANS;
+  x.fillText(periodoRange(),S/2,196);
 
-  // ── Rosca: trilho de fundo + fatias com pontas arredondadas
-  const cx=S/2,cy=422,R=136,W=44;
-  x.strokeStyle='rgba(255,255,255,0.05)';x.lineWidth=W;
-  x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.stroke();
-  if(total){
-    const varias=itens.length>1;
-    x.lineCap=varias?'round':'butt';
-    const vao=varias?0.05:0;
+  // ── Total: fica ACIMA do gráfico, com espaço próprio (não sobreposto)
+  x.fillStyle='#F5F4F1';x.font='800 70px '+DISP;
+  x.fillText(total?fmt(total):'0h 0m',S/2,278);
+  x.fillStyle='#7E8896';x.font='500 20px '+SANS;
+  x.fillText('estudados',S/2,312);
+
+  // ── Pizza: fatias cheias com corte limpo entre as matérias
+  const cx=S/2,cy=468,R=126;
+  if(!total){
+    x.fillStyle='rgba(255,255,255,0.04)';
+    x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.fill();
+  }else{
     let ang=-Math.PI/2;
     itens.forEach(it=>{
       const sweep=it.pct/100*Math.PI*2;
-      if(sweep>vao*1.2){
-        x.strokeStyle=it.cor;x.lineWidth=W;
-        x.beginPath();x.arc(cx,cy,R,ang+vao/2,ang+sweep-vao/2);x.stroke();
+      x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,R,ang,ang+sweep);x.closePath();
+      x.fillStyle=it.cor;x.fill();
+      if(itens.length>1){// o traço na cor do fundo faz o corte entre as fatias
+        x.strokeStyle='#0E1117';x.lineWidth=5;x.lineJoin='round';x.stroke();
+      }
+      if(it.pct>=11){// fatias grandes levam a porcentagem dentro
+        const meio=ang+sweep/2;
+        x.fillStyle=corDoTextoSobre(it.cor);
+        x.font='700 25px '+DISP;x.textAlign='center';
+        x.fillText(Math.round(it.pct)+'%',cx+Math.cos(meio)*R*0.62,cy+Math.sin(meio)*R*0.62+9);
       }
       ang+=sweep;
     });
-    x.lineCap='butt';
   }
-  // Centro: o número é o herói da imagem
-  x.textAlign='center';
-  x.fillStyle='#F5F4F1';x.font='800 68px '+DISP;
-  x.fillText(total?fmt(total):'0h 0m',cx,cy+10);
-  x.fillStyle='#7E8896';x.font='500 20px '+SANS;
-  x.fillText('estudados',cx,cy+46);
 
-  // ── Legenda: nome · tempo · % com barra proporcional
-  let ly=632;
+  // ── Legenda: a barra mostra a porcentagem real da matéria
+  let ly=674;
   if(!itens.length){
-    x.fillStyle='#7E8896';x.font='500 25px '+SANS;
-    x.fillText(piePeriod==='hoje'?'Nenhuma sessão registrada hoje':'Nenhuma sessão neste período',S/2,ly+40);
+    x.textAlign='center';x.fillStyle='#7E8896';x.font='500 25px '+SANS;
+    x.fillText(piePeriod==='hoje'?'Nenhuma sessão registrada hoje':'Nenhuma sessão neste período',S/2,ly);
   }else{
-    const maxPct=Math.max(...itens.map(i=>i.pct),1);
     itens.forEach(it=>{
       x.textAlign='left';
-      x.fillStyle=it.cor;rrect(x,M,ly-16,14,14,4);x.fill();
-      x.fillStyle='#EDECE8';x.font='500 25px '+SANS;
+      x.fillStyle=it.cor;rrect(x,M,ly-15,13,13,4);x.fill();
+      x.fillStyle='#EDECE8';x.font='500 24px '+SANS;
       const nome=it.nome.length>22?it.nome.slice(0,21)+'…':it.nome;
-      x.fillText(nome,M+26,ly);
+      x.fillText(nome,M+25,ly);
       x.textAlign='right';
-      x.fillStyle=it.cor;x.font='700 25px '+DISP;
+      x.fillStyle=it.cor;x.font='700 24px '+DISP;
       x.fillText(Math.round(it.pct)+'%',S-M,ly);
-      x.fillStyle='#7E8896';x.font='500 22px '+SANS;
-      x.fillText(fmt(it.secs),S-M-86,ly);
-      // barra proporcional (a maior matéria ocupa a largura toda)
-      const larg=S-M*2, prop=Math.max(.02,it.pct/maxPct);
-      x.fillStyle='rgba(255,255,255,0.06)';rrect(x,M,ly+12,larg,6,3);x.fill();
-      x.fillStyle=it.cor;rrect(x,M,ly+12,larg*prop,6,3);x.fill();
-      ly+=54;
+      x.fillStyle='#7E8896';x.font='500 21px '+SANS;
+      x.fillText(fmt(it.secs),S-M-82,ly);
+      const larg=S-M*2;
+      x.fillStyle='rgba(255,255,255,0.06)';rrect(x,M,ly+11,larg,6,3);x.fill();
+      x.fillStyle=it.cor;rrect(x,M,ly+11,Math.max(4,larg*it.pct/100),6,3);x.fill();
+      ly+=46;
     });
   }
 
