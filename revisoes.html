@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=6">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.svg?v=6">
+<meta name="theme-color" content="#0E1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Focadus">
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<title>Focadus — Revisões</title>
+<style>
+/* Painel de memória */
+.mem-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem;}
+.mem-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem 1.1rem;display:flex;flex-direction:column;gap:6px;}
+.mem-card .mem-num{font-size:30px;font-weight:700;letter-spacing:-1px;line-height:1;font-family:'Manrope',sans-serif;}
+.mem-card .mem-lbl{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+.mem-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+@media(max-width:700px){.mem-grid{grid-template-columns:repeat(2,1fr);}}
+
+/* Cards de conteúdo */
+.sec-title{font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:1.75rem 0 .9rem;}
+.cont-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:10px;cursor:pointer;transition:border-color .18s,transform .18s;}
+.cont-card:hover{border-color:rgba(198,154,58,.3);transform:translateY(-1px);}
+.cont-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.cont-nome{font-size:15px;font-weight:600;}
+.cont-meta{font-size:12px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.cont-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;flex-shrink:0;}
+.membar{height:6px;border-radius:4px;background:var(--surface2);overflow:hidden;margin-top:10px;}
+.membar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+.tipo-pill{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:2px 8px;}
+.due-pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
+.due-atrasada{background:rgba(226,75,74,.12);color:var(--red);}
+.due-hoje{background:rgba(239,159,39,.14);color:var(--amber);}
+
+/* Estrelas de importância */
+.star-row{display:flex;gap:6px;margin-top:4px;}
+.star-btn{background:none;border:none;cursor:pointer;padding:2px;color:var(--muted);transition:color .15s,transform .15s;}
+.star-btn:hover{transform:scale(1.15);}
+.star-btn.on{color:#F5C462;}
+
+/* Botões de avaliação da revisão */
+.rate-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;}
+.rate-btn{border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:14px 10px;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit;color:var(--text);}
+.rate-btn:hover{transform:translateY(-2px);}
+.rate-btn .rate-t{font-size:14px;font-weight:600;}
+.rate-btn .rate-s{font-size:11px;color:var(--muted);margin-top:3px;}
+.rate-0:hover{border-color:var(--red);background:rgba(226,75,74,.08);}
+.rate-1:hover{border-color:var(--amber);background:rgba(239,159,39,.08);}
+.rate-2:hover{border-color:#1D9E75;background:rgba(29,158,117,.08);}
+.rate-3:hover{border-color:#378ADD;background:rgba(55,138,221,.08);}
+
+/* Abas do detalhe */
+.det-tabs{display:flex;gap:6px;margin:1rem 0 .75rem;flex-wrap:wrap;}
+.det-tab{border:1px solid var(--border);background:none;color:var(--muted);border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.det-tab.on{background:rgba(198,154,58,.12);color:var(--blue);border-color:rgba(198,154,58,.3);}
+.det-body{font-size:14px;line-height:1.7;color:var(--text);white-space:pre-wrap;min-height:60px;}
+.det-empty{color:var(--muted);font-style:italic;}
+.hist-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.hist-row:last-child{border-bottom:none;}
+.modal-textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;min-height:70px;line-height:1.6;}
+.modal-textarea:focus{outline:none;border-color:rgba(198,154,58,.5);}
+.imp-label{font-size:12px;color:var(--muted);}
+select.modal-input{cursor:pointer;}
+.next-preview{background:rgba(198,154,58,.08);border:1px solid rgba(198,154,58,.2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text);margin-top:12px;}
+
+@media(max-width:480px){
+  .rate-grid{grid-template-columns:1fr;}
+  .cont-top{flex-direction:column;gap:6px;}
+}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo"><svg width="150" height="36" viewBox="0 0 150 36" overflow="visible" fill="none"><path d="M4 24C9 24 13 6 18 6C23 6 27 24 32 24C37 24 41 6 46 6" stroke="#C69A3A" stroke-width="2.5" stroke-linecap="round" fill="none"/><circle cx="46" cy="6" r="4" fill="#F4E3A7"/><text x="58" y="22" font-family="Manrope,system-ui,sans-serif" font-size="17" font-weight="800" fill="#F0EDE4">Foca<tspan font-weight="700" fill="#C69A3A">dus</tspan></text></svg></div>
+  <a class="nav-item" href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Dashboard</span></a>
+  <a class="nav-item" href="cronometro.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9.5 2.5h5M12 2.5V5"/></svg><span>Cronômetro</span></a>
+  <a class="nav-item" href="cronograma.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg><span>Cronograma</span></a>
+  <a class="nav-item" href="graficos.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H3"/><path d="M7 10v11M11 4v17M15 8v13M19 14v7"/></svg><span>Gráficos</span></a>
+  <a class="nav-item" href="metas.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg><span>Metas</span></a>
+  <a class="nav-item" href="provas.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Provas</span></a>
+  <a class="nav-item active" href="revisoes.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 8v4l3 2"/></svg><span>Revisões</span></a>
+  <div class="nav-bottom">
+    <div class="user-chip" onclick="openProfileModal()">
+      <div class="avatar-el" id="avatar-el">?</div>
+      <div style="min-width:0;flex:1;"><div class="user-name-row"><span class="user-name-el" id="user-name-el">...</span></div><div class="user-edit-label"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg> Editar perfil</div></div>
+      <span class="nav-arrow">›</span>
+    </div>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title">Revisões</div>
+      <div class="page-sub">Revisão espaçada que se adapta a você</div>
+    </div>
+    <div class="topbar-right">
+      <button class="install-btn" id="install-btn" onclick="installPWA()" title="Instalar app"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v13M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Instalar app</button>
+      <button class="add-btn" onclick="openConteudoModal()">+ Novo conteúdo</button>
+    </div>
+  </div>
+
+  <div class="sec-title" style="margin-top:0;">Sua memória hoje</div>
+  <div class="mem-grid" id="mem-grid"></div>
+
+  <div id="hoje-wrap"></div>
+  <div id="todos-wrap"></div>
+</main>
+
+<!-- MODAL NOVO/EDITAR CONTEÚDO -->
+<div class="modal-overlay" id="modal-conteudo" onclick="if(event.target===this)closeConteudoModal()">
+  <div class="modal-box" style="max-height:88vh;overflow-y:auto;">
+    <div class="modal-title" id="conteudo-modal-title">Novo conteúdo</div>
+    <label class="modal-label">Matéria</label>
+    <input class="modal-input" type="text" id="c-materia" list="materias-list" placeholder="Ex: Matemática">
+    <datalist id="materias-list"></datalist>
+    <label class="modal-label">Conteúdo / assunto</label>
+    <input class="modal-input" type="text" id="c-titulo" placeholder="Ex: Função quadrática">
+    <label class="modal-label">Importância</label>
+    <div class="star-row" id="star-row"></div>
+    <label class="modal-label" style="margin-top:14px;">Tipo</label>
+    <select class="modal-input" id="c-tipo">
+      <option value="teorico">Teórico</option>
+      <option value="exercicios">Exercícios</option>
+      <option value="formulas">Fórmulas</option>
+      <option value="conceitos">Conceitos</option>
+      <option value="vocabulario">Vocabulário</option>
+      <option value="misto" selected>Misto</option>
+    </select>
+    <label class="modal-label">Data em que estudou</label>
+    <input class="modal-input" type="date" id="c-data">
+    <label class="modal-label">Conteúdo / resumo</label>
+    <textarea class="modal-textarea" id="c-conteudo" placeholder="Explicação ou resumo do assunto..."></textarea>
+    <label class="modal-label" style="margin-top:12px;">Minhas anotações</label>
+    <textarea class="modal-textarea" id="c-anotacoes" placeholder="Observações pessoais..."></textarea>
+    <label class="modal-label" style="margin-top:12px;">Fórmulas</label>
+    <textarea class="modal-textarea" id="c-formulas" placeholder="Fórmulas importantes..."></textarea>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeConteudoModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveConteudo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE -->
+<div class="modal-overlay" id="modal-detalhe" onclick="if(event.target===this)closeDetalhe()">
+  <div class="modal-box" style="max-height:88vh;overflow-y:auto;">
+    <div id="det-head"></div>
+    <div class="det-tabs" id="det-tabs"></div>
+    <div class="det-body" id="det-body"></div>
+    <div class="modal-btns" style="flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="closeDetalhe()">Fechar</button>
+      <button class="btn-secondary" id="det-edit-btn">Editar</button>
+      <button class="btn-secondary" id="det-del-btn" style="color:var(--red);">Excluir</button>
+      <button class="btn-primary" id="det-rev-btn">Revisar agora</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REVISÃO -->
+<div class="modal-overlay" id="modal-revisao" onclick="if(event.target===this)closeRevisao()">
+  <div class="modal-box">
+    <div class="modal-title" id="rev-titulo">Revisar</div>
+    <div id="rev-materia" style="font-size:13px;color:var(--muted);margin-top:-6px;margin-bottom:12px;"></div>
+    <div id="rev-reveal-wrap">
+      <button class="btn-secondary" style="width:100%;" onclick="revealConteudo()">Tente lembrar, depois toque para ver o conteúdo</button>
+    </div>
+    <div id="rev-conteudo" style="display:none;"></div>
+    <div id="rev-rate" style="display:none;">
+      <div class="imp-label" style="margin-top:16px;margin-bottom:2px;">Como foi lembrar disso?</div>
+      <div class="rate-grid">
+        <button class="rate-btn rate-0" onclick="applyReview(0)"><div class="rate-t">Muito difícil</div><div class="rate-s">não lembrei</div></button>
+        <button class="rate-btn rate-1" onclick="applyReview(1)"><div class="rate-t">Difícil</div><div class="rate-s">com esforço</div></button>
+        <button class="rate-btn rate-2" onclick="applyReview(2)"><div class="rate-t">Bom</div><div class="rate-s">lembrei bem</div></button>
+        <button class="rate-btn rate-3" onclick="applyReview(3)"><div class="rate-t">Muito fácil</div><div class="rate-s">tranquilo</div></button>
+      </div>
+      <div style="margin-top:14px;">
+        <div class="imp-label" style="margin-bottom:6px;">Ou defina você mesmo a próxima revisão:</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:13px;color:var(--muted);">daqui a</span>
+          <input type="number" min="1" max="365" id="rev-manual-dias" class="modal-input" style="width:80px;" placeholder="dias">
+          <span style="font-size:13px;color:var(--muted);">dias</span>
+          <button class="btn-secondary" onclick="applyManual()">Definir</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-btns"><button class="btn-secondary" onclick="closeRevisao()">Cancelar</button></div>
+  </div>
+</div>
+
+<!-- MODAL PERFIL -->
+<div class="modal-overlay" id="modal-profile" onclick="if(event.target===this)closeProfileModal()">
+  <div class="modal-box">
+    <div class="modal-title">Editar perfil</div>
+    <div style="text-align:center;margin-bottom:1.25rem;">
+      <div class="profile-avatar-big" id="profile-avatar-big" onclick="document.getElementById('photo-file').click()"></div>
+      <input type="file" id="photo-file" accept="image/*" style="display:none" onchange="handlePhoto(this)">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Clique na foto para alterar</div>
+    </div>
+    <label class="modal-label">Nome</label>
+    <input class="modal-input" type="text" id="profile-name-inp" placeholder="Seu nome">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeProfileModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveProfile()">Salvar</button>
+    </div>
+    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:500;margin-bottom:10px;">Conta</div>
+      <button onclick="doLogout()" class="account-action-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sair da conta</button>
+    </div>
+  </div>
+</div>
+
+<script src="dialogs.js"></script>
+<script src="notifications.js"></script>
+<script src="firebase-messaging.js"></script>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import{initializeAppCheck,ReCaptchaV3Provider}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
+import{getAuth,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import{getFirestore,doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,where}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
+const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
+let cu,subjects=[],conteudos=[];
+let editingId=null,detalheId=null,revisandoId=null;
+
+const th=localStorage.getItem('bz-theme')||'dark';
+document.documentElement.setAttribute('data-theme',th);
+
+/* ───── Helpers de data (fuso local, sem drift UTC) ───── */
+function localDay(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function todayStr(){return localDay(new Date());}
+function addDays(dstr,n){const d=new Date(dstr+'T00:00:00');d.setDate(d.getDate()+n);return localDay(d);}
+function diffDays(aStr,bStr){return Math.round((new Date(aStr+'T00:00:00')-new Date(bStr+'T00:00:00'))/(1000*60*60*24));}
+function fmtBr(dstr){if(!dstr)return'';return new Date(dstr+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+const TIPO_LABEL={teorico:'Teórico',exercicios:'Exercícios',formulas:'Fórmulas',conceitos:'Conceitos',vocabulario:'Vocabulário',misto:'Misto'};
+
+/* ───── MOTOR DE REVISÃO (SM-2 adaptado, conservador) ───── */
+const EASE_MIN=1.3,EASE_MAX=2.3,EASE_DEFAULT=1.7;
+// q: 0 muito difícil · 1 difícil · 2 bom · 3 muito fácil
+function computeReview(item,q){
+  let ease=(typeof item.ease==='number')?item.ease:EASE_DEFAULT;
+  let interval=(typeof item.interval==='number')?item.interval:1;
+  let reps=item.reps||0;
+  ease=Math.max(EASE_MIN,Math.min(EASE_MAX,ease+[-0.30,-0.15,0.05,0.15][q]));
+  let ni;
+  if(q===0){ni=Math.max(1,Math.round(interval*0.4));reps=0;}// esqueceu: recua (gradual), volta a aprender
+  else if(reps===0){ni=[0,2,4,7][q];reps=1;}// 1ª revisão bem-sucedida: valores base
+  else{
+    const mult=q===1?1.2:(q===2?Math.min(ease,2.0):Math.min(ease+0.5,2.6));
+    ni=Math.max(interval+1,Math.round(interval*mult));// cresce, mas nunca menos que +1 dia
+    reps=reps+1;
+  }
+  ni=Math.min(ni,365);
+  return{ease:Math.round(ease*100)/100,interval:ni,reps};
+}
+function memoryLevel(item){
+  const reps=item.reps||0;
+  const ease=(typeof item.ease==='number')?item.ease:EASE_DEFAULT;
+  const lastQ=(item.history&&item.history.length)?item.history[item.history.length-1].q:null;
+  let score=0;
+  score+=Math.min(reps,6)/6*40;
+  score+=(ease-EASE_MIN)/(EASE_MAX-EASE_MIN)*30;
+  score+=(lastQ==null?0:[0,8,22,30][lastQ]);
+  return Math.max(0,Math.min(100,Math.round(score)));
+}
+function statusOf(item){
+  const ml=memoryLevel(item);
+  const t=todayStr();
+  const nr=item.nextReview||t;
+  const reps=item.reps||0;
+  if(nr<t)return{key:'risco',label:'Em risco',color:'#E24B4A'};       // revisão atrasada
+  if(reps===0)return{key:'atencao',label:'Atenção',color:'#EF9F27'};  // novo, ainda aprendendo
+  if(ml<45)return{key:'risco',label:'Em risco',color:'#E24B4A'};      // memória fraca comprovada
+  if(nr===t||ml<65)return{key:'atencao',label:'Atenção',color:'#EF9F27'};
+  if(ml<85)return{key:'estavel',label:'Estável',color:'#1D9E75'};
+  return{key:'consolidado',label:'Consolidado',color:'#378ADD'};
+}
+
+/* ───── Paywall / trial (padrão das outras páginas) ───── */
+function showPaywall(){
+  document.body.innerHTML=`<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#0E1117;color:#F0EDE4;font-family:'Manrope',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}.pw{max-width:420px;width:100%;text-align:center;}.pw h1{font-size:26px;font-weight:700;margin-bottom:10px;}.pw p{color:#9A8A70;line-height:1.6;margin-bottom:28px;}.pw-btn{display:inline-block;background:#C69A3A;color:#fff;font-weight:700;font-size:16px;padding:14px 36px;border-radius:12px;text-decoration:none;}.pw-logout{margin-top:16px;font-size:13px;color:#9A8A70;cursor:pointer;background:none;border:none;}</style>
+  <div class="pw"><div style="margin-bottom:20px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#C69A3A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h1>Acesso Premium</h1><p>Seu período de avaliação gratuita expirou.<br>Adquira o acesso vitalício por apenas <strong style="color:#C69A3A">R$29</strong>.</p><a class="pw-btn" href="https://pay.kiwify.com.br/cZGAGEi" target="_blank">Desbloquear Agora — R$29</a><br><button class="pw-logout" onclick="import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js').then(m=>m.signOut(m.getAuth())).finally(()=>{window.location.href='https://focadus.com.br/';})">Sair da conta</button></div>`;
+}
+function showTrialBanner(daysLeft){
+  const bar=document.createElement('div');bar.id='trial-bar';
+  bar.innerHTML=`<style>#trial-bar{position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#F59E0B,#F97316);color:#000;font-family:'Manrope',sans-serif;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;padding:5px 16px;height:32px;}#trial-bar a{background:#000;color:#fff;padding:3px 12px;border-radius:6px;text-decoration:none;font-size:11px;white-space:nowrap;flex-shrink:0;}.sidebar{top:32px!important;}.main{padding-top:calc(var(--topbar-h,60px) + 32px)!important;}</style>Período gratuito — <strong>${daysLeft} dia${daysLeft===1?'':'s'}</strong> restante${daysLeft===1?'':'s'}.<a href="https://pay.kiwify.com.br/cZGAGEi" target="_blank">Garantir acesso — R$29</a>`;
+  document.body.prepend(bar);
+}
+function showPremiumBadge(){const nameEl=document.getElementById('user-name-el');if(nameEl&&!document.getElementById('premium-badge')){const badge=document.createElement('div');badge.id='premium-badge';badge.textContent='✦ Premium';badge.style.cssText='display:inline-block;background:linear-gradient(90deg,#C69A3A,#F5C462);color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.04em;white-space:nowrap;flex-shrink:0;';nameEl.parentNode.appendChild(badge);}}
+async function checkAccess(user){
+  const snap=await getDocs(query(collection(db,'pagantes'),where('email','==',user.email)));
+  if(!snap.empty)return{ok:true,trial:false,daysLeft:0};
+  const created=new Date(user.metadata.creationTime);
+  const diff=(Date.now()-created.getTime())/(1000*60*60*24);
+  const daysLeft=Math.max(0,7-Math.floor(diff));
+  if(daysLeft>0)return{ok:true,trial:true,daysLeft};
+  return{ok:false,trial:false,daysLeft:0};
+}
+
+onAuthStateChanged(auth,async user=>{
+  if(!user){window.location.href='login.html';return;}
+  cu=user;
+  const access=await checkAccess(user);
+  if(!access.ok){showPaywall();return;}
+  if(access.trial){showTrialBanner(access.daysLeft);}else{setTimeout(()=>showPremiumBadge(),500);}
+  const pSnap=await getDoc(doc(db,`users/${cu.uid}/data`,'profile'));
+  const pData=pSnap.exists()?pSnap.data():{};
+  const name=pData.name||user.displayName||user.email.split('@')[0];
+  window._profilePhoto=pData.photo||null;
+  setAvatar(name,window._profilePhoto);
+  try{
+    const ss=await getDoc(doc(db,`users/${cu.uid}/data`,'subjects'));
+    subjects=ss.exists()?ss.data().list||[]:[];
+  }catch(e){subjects=[];}
+  await loadConteudos();
+});
+
+function setAvatar(name,photo){const initials=name.trim().split(/\s+/).filter(Boolean).map(n=>n[0]).join('').toUpperCase().slice(0,2);const av=document.getElementById('avatar-el');if(photo)av.innerHTML=`<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;else av.textContent=initials;document.getElementById('user-name-el').textContent=name;}
+
+async function loadConteudos(){
+  try{
+    const snap=await getDocs(collection(db,`users/${cu.uid}/revisoes`));
+    conteudos=snap.docs.map(d=>({id:d.id,...d.data()}));
+  }catch(e){
+    console.error('[loadConteudos]',e);
+    bzAlert('Erro ao carregar','Não foi possível carregar os conteúdos: '+(e.code||e.message||'erro'),'danger');
+    conteudos=[];
+  }
+  render();
+}
+
+/* ───── Render ───── */
+function render(){
+  renderMemGrid();
+  renderHoje();
+  renderTodos();
+}
+function renderMemGrid(){
+  const counts={risco:0,atencao:0,estavel:0,consolidado:0};
+  conteudos.forEach(c=>{counts[statusOf(c).key]++;});
+  const defs=[
+    {k:'risco',lbl:'Em risco',color:'#E24B4A'},
+    {k:'atencao',lbl:'Atenção',color:'#EF9F27'},
+    {k:'estavel',lbl:'Estável',color:'#1D9E75'},
+    {k:'consolidado',lbl:'Consolidado',color:'#378ADD'},
+  ];
+  document.getElementById('mem-grid').innerHTML=defs.map(d=>`<div class="mem-card"><div class="mem-num" style="color:${d.color};">${counts[d.k]}</div><div class="mem-lbl"><span class="mem-dot" style="background:${d.color};"></span>${d.lbl}</div></div>`).join('');
+}
+function renderHoje(){
+  const t=todayStr();
+  const due=conteudos.filter(c=>(c.nextReview||t)<=t).sort((a,b)=>(a.nextReview||t)<(b.nextReview||t)?-1:1);
+  const wrap=document.getElementById('hoje-wrap');
+  if(!due.length){
+    wrap.innerHTML=`<div class="sec-title">Revisões de hoje</div><div class="cont-card" style="cursor:default;text-align:center;color:var(--muted);">Nenhuma revisão pendente. Tudo em dia! 🎉</div>`;
+    return;
+  }
+  wrap.innerHTML=`<div class="sec-title">Revisões de hoje · ${due.length}</div>`+due.map(c=>cardHtml(c,true)).join('');
+}
+function renderTodos(){
+  const wrap=document.getElementById('todos-wrap');
+  if(!conteudos.length){
+    wrap.innerHTML=`<div class="sec-title">Todos os conteúdos</div><div class="cont-card" style="cursor:default;text-align:center;color:var(--muted);padding:2.5rem 1rem;">Nenhum conteúdo cadastrado ainda.<br>Adicione o primeiro com "+ Novo conteúdo".</div>`;
+    return;
+  }
+  const byMat={};
+  conteudos.forEach(c=>{const m=c.materia||'Sem matéria';(byMat[m]=byMat[m]||[]).push(c);});
+  let html=`<div class="sec-title">Todos os conteúdos · ${conteudos.length}</div>`;
+  Object.keys(byMat).sort().forEach(m=>{
+    html+=`<div style="font-size:13px;font-weight:600;margin:14px 0 8px;color:var(--text);">${esc(m)}</div>`;
+    html+=byMat[m].sort((a,b)=>(a.nextReview||'')<(b.nextReview||'')?-1:1).map(c=>cardHtml(c,false)).join('');
+  });
+  wrap.innerHTML=html;
+}
+function cardHtml(c,showDue){
+  const st=statusOf(c);
+  const ml=memoryLevel(c);
+  const t=todayStr();
+  const nr=c.nextReview||t;
+  let duePill='';
+  if(nr<t)duePill=`<span class="due-pill due-atrasada">atrasada ${Math.abs(diffDays(nr,t))}d</span>`;
+  else if(nr===t)duePill=`<span class="due-pill due-hoje">hoje</span>`;
+  const nextInfo=nr<=t?'':`próxima ${fmtBr(nr)}`;
+  return`<div class="cont-card" onclick="openDetalhe('${c.id}')">
+    <div class="cont-top">
+      <div style="min-width:0;">
+        <div class="cont-nome">${esc(c.titulo)}</div>
+        <div class="cont-meta"><span class="tipo-pill">${TIPO_LABEL[c.tipo]||'Misto'}</span>${'★'.repeat(c.importancia||1)}${duePill}${nextInfo?`<span>${nextInfo}</span>`:''}</div>
+      </div>
+      <span class="cont-status" style="background:${st.color}1f;color:${st.color};"><span class="mem-dot" style="background:${st.color};"></span>${st.label}</span>
+    </div>
+    <div class="membar"><div class="membar-fill" style="width:${ml}%;background:${st.color};"></div></div>
+    ${showDue?`<button class="btn-primary" style="width:100%;margin-top:12px;" onclick="event.stopPropagation();openRevisao('${c.id}')">Revisar agora</button>`:''}
+  </div>`;
+}
+
+/* ───── Estrelas ───── */
+let starSel=3;
+function renderStars(){
+  const row=document.getElementById('star-row');
+  row.innerHTML='';
+  for(let i=1;i<=5;i++){
+    const b=document.createElement('button');
+    b.className='star-btn'+(i<=starSel?' on':'');
+    b.type='button';
+    b.innerHTML=`<svg width="22" height="22" viewBox="0 0 24 24" fill="${i<=starSel?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
+    b.onclick=()=>{starSel=i;renderStars();};
+    row.appendChild(b);
+  }
+}
+
+/* ───── CRUD conteúdo ───── */
+window.openConteudoModal=(id)=>{
+  editingId=id||null;
+  document.getElementById('conteudo-modal-title').textContent=editingId?'Editar conteúdo':'Novo conteúdo';
+  document.getElementById('materias-list').innerHTML=[...new Set(subjects.map(s=>s.name).concat(conteudos.map(c=>c.materia)).filter(Boolean))].map(m=>`<option value="${esc(m)}">`).join('');
+  const c=editingId?conteudos.find(x=>x.id===editingId):null;
+  document.getElementById('c-materia').value=c?c.materia||'':'';
+  document.getElementById('c-titulo').value=c?c.titulo||'':'';
+  starSel=c?(c.importancia||3):3;renderStars();
+  document.getElementById('c-tipo').value=c?(c.tipo||'misto'):'misto';
+  document.getElementById('c-data').value=c?(c.studiedAt||todayStr()):todayStr();
+  document.getElementById('c-data').max=todayStr();
+  document.getElementById('c-conteudo').value=c?c.conteudo||'':'';
+  document.getElementById('c-anotacoes').value=c?c.anotacoes||'':'';
+  document.getElementById('c-formulas').value=c?c.formulas||'':'';
+  document.getElementById('modal-conteudo').classList.add('open');
+  setTimeout(()=>document.getElementById('c-materia').focus(),100);
+};
+window.closeConteudoModal=()=>document.getElementById('modal-conteudo').classList.remove('open');
+window.saveConteudo=async()=>{
+  const materia=document.getElementById('c-materia').value.trim();
+  const titulo=document.getElementById('c-titulo').value.trim();
+  const studiedAt=document.getElementById('c-data').value||todayStr();
+  if(!titulo){bzAlert('Faltou o conteúdo','Digite o nome do conteúdo/assunto.','warn');return;}
+  const base={
+    materia:materia||'Sem matéria',titulo,
+    importancia:starSel,tipo:document.getElementById('c-tipo').value,
+    studiedAt,
+    conteudo:document.getElementById('c-conteudo').value,
+    anotacoes:document.getElementById('c-anotacoes').value,
+    formulas:document.getElementById('c-formulas').value,
+  };
+  try{
+    if(editingId){
+      await updateDoc(doc(db,`users/${cu.uid}/revisoes`,editingId),base);
+      const it=conteudos.find(x=>x.id===editingId);Object.assign(it,base);
+    }else{
+      const id=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2));
+      const novo={...base,ease:EASE_DEFAULT,interval:1,reps:0,nextReview:addDays(studiedAt,1),history:[],criadaEm:Date.now()};
+      await setDoc(doc(db,`users/${cu.uid}/revisoes`,id),novo);
+      conteudos.push({id,...novo});
+    }
+    closeConteudoModal();render();
+  }catch(e){bzAlert('Erro ao salvar',(e.code||e.message||'desconhecido'),'danger');}
+};
+
+/* ───── Detalhe ───── */
+let detTab='conteudo';
+window.openDetalhe=(id)=>{
+  detalheId=id;detTab='conteudo';
+  const c=conteudos.find(x=>x.id===id);if(!c)return;
+  const st=statusOf(c),ml=memoryLevel(c);
+  document.getElementById('det-head').innerHTML=`
+    <div class="modal-title" style="margin-bottom:2px;">${esc(c.titulo)}</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">${esc(c.materia||'')} · ${TIPO_LABEL[c.tipo]||'Misto'} · ${'★'.repeat(c.importancia||1)}</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+      <span class="cont-status" style="background:${st.color}1f;color:${st.color};"><span class="mem-dot" style="background:${st.color};"></span>${st.label}</span>
+      <span style="font-size:13px;color:var(--muted);">Memória ${ml}%</span>
+      <span style="font-size:13px;color:var(--muted);">Próxima: ${fmtBr(c.nextReview)||'—'}</span>
+    </div>
+    <div class="membar"><div class="membar-fill" style="width:${ml}%;background:${st.color};"></div></div>`;
+  document.getElementById('det-tabs').innerHTML=[['conteudo','Conteúdo'],['anotacoes','Anotações'],['formulas','Fórmulas'],['historico','Histórico']].map(([k,l])=>`<button class="det-tab${detTab===k?' on':''}" data-tab="${k}" onclick="setDetTab('${k}')">${l}</button>`).join('');
+  renderDetBody();
+  document.getElementById('det-edit-btn').onclick=()=>{closeDetalhe();openConteudoModal(id);};
+  document.getElementById('det-del-btn').onclick=()=>deleteConteudo(id);
+  document.getElementById('det-rev-btn').onclick=()=>{closeDetalhe();openRevisao(id);};
+  document.getElementById('modal-detalhe').classList.add('open');
+};
+window.setDetTab=(k)=>{detTab=k;document.querySelectorAll('#det-tabs .det-tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===k));renderDetBody();};
+function renderDetBody(){
+  const c=conteudos.find(x=>x.id===detalheId);if(!c)return;
+  const body=document.getElementById('det-body');
+  if(detTab==='historico'){
+    if(!c.history||!c.history.length){body.innerHTML=`<div class="det-empty">Nenhuma revisão feita ainda.</div>`;return;}
+    const qLabel=['Muito difícil','Difícil','Bom','Muito fácil'];
+    const qColor=['#E24B4A','#EF9F27','#1D9E75','#378ADD'];
+    const rows=[`<div class="hist-row" style="color:var(--muted);"><span>Estudou em ${fmtBr(c.studiedAt)}</span><span></span></div>`]
+      .concat(c.history.map((h,i)=>`<div class="hist-row"><span>${fmtBr(h.date)} · <span style="color:${qColor[h.q]};font-weight:600;">${qLabel[h.q]}</span></span><span style="color:var(--muted);">→ +${h.intervalAfter}d</span></div>`));
+    body.innerHTML=rows.join('');
+    return;
+  }
+  const val=c[detTab];
+  body.innerHTML=(val&&val.trim())?esc(val):`<div class="det-empty">Nada anotado aqui ainda. Use "Editar" para adicionar.</div>`;
+}
+window.closeDetalhe=()=>document.getElementById('modal-detalhe').classList.remove('open');
+async function deleteConteudo(id){
+  bzConfirm('Excluir conteúdo','Isso apaga o conteúdo e todo o histórico de revisões dele. Não pode ser desfeito.','danger',async()=>{
+    try{
+      await deleteDoc(doc(db,`users/${cu.uid}/revisoes`,id));
+      conteudos=conteudos.filter(x=>x.id!==id);
+      closeDetalhe();render();
+    }catch(e){bzAlert('Erro ao excluir',(e.code||e.message||'desconhecido'),'danger');}
+  });
+}
+
+/* ───── Revisão ───── */
+window.openRevisao=(id)=>{
+  revisandoId=id;
+  const c=conteudos.find(x=>x.id===id);if(!c)return;
+  document.getElementById('rev-titulo').textContent=c.titulo;
+  document.getElementById('rev-materia').textContent=`${c.materia||''} · ${TIPO_LABEL[c.tipo]||'Misto'}`;
+  document.getElementById('rev-reveal-wrap').style.display='';
+  document.getElementById('rev-conteudo').style.display='none';
+  document.getElementById('rev-conteudo').innerHTML='';
+  document.getElementById('rev-rate').style.display='none';
+  document.getElementById('rev-manual-dias').value='';
+  document.getElementById('modal-revisao').classList.add('open');
+};
+window.revealConteudo=()=>{
+  const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
+  const parts=[];
+  if(c.conteudo&&c.conteudo.trim())parts.push(`<div style="margin-bottom:8px;"><div class="imp-label">Conteúdo</div><div class="det-body">${esc(c.conteudo)}</div></div>`);
+  if(c.formulas&&c.formulas.trim())parts.push(`<div style="margin-bottom:8px;"><div class="imp-label">Fórmulas</div><div class="det-body">${esc(c.formulas)}</div></div>`);
+  if(c.anotacoes&&c.anotacoes.trim())parts.push(`<div style="margin-bottom:8px;"><div class="imp-label">Anotações</div><div class="det-body">${esc(c.anotacoes)}</div></div>`);
+  document.getElementById('rev-conteudo').innerHTML=parts.length?parts.join(''):`<div class="det-empty" style="padding:8px 0;">Sem conteúdo salvo — avalie pela memória.</div>`;
+  document.getElementById('rev-conteudo').style.display='';
+  document.getElementById('rev-reveal-wrap').style.display='none';
+  document.getElementById('rev-rate').style.display='';
+};
+async function persistReview(c,interval,q){
+  const ease=q!=null?computeReview(c,q).ease:c.ease;
+  const reps=q!=null?computeReview(c,q).reps:(c.reps||0);
+  const nextReview=addDays(todayStr(),interval);
+  const history=(c.history||[]).concat([{date:todayStr(),q:q==null?2:q,intervalAfter:interval}]);
+  const patch={ease,reps,interval,nextReview,history};
+  const backup={ease:c.ease,reps:c.reps,interval:c.interval,nextReview:c.nextReview,history:c.history};
+  Object.assign(c,patch);
+  try{
+    await updateDoc(doc(db,`users/${cu.uid}/revisoes`,c.id),patch);
+    closeRevisao();render();
+    showToastMsg(`Próxima revisão em ${interval} dia${interval===1?'':'s'} · ${fmtBr(nextReview)}`);
+  }catch(e){Object.assign(c,backup);bzAlert('Erro ao salvar revisão',(e.code||e.message||'desconhecido'),'danger');}
+}
+window.applyReview=(q)=>{
+  const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
+  const r=computeReview(c,q);
+  persistReview(c,r.interval,q);
+};
+window.applyManual=()=>{
+  const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
+  const dias=parseInt(document.getElementById('rev-manual-dias').value);
+  if(!dias||dias<1||dias>365){bzAlert('Valor inválido','Digite um número de dias entre 1 e 365.','warn');return;}
+  persistReview(c,dias,null);
+};
+window.closeRevisao=()=>document.getElementById('modal-revisao').classList.remove('open');
+
+function showToastMsg(msg){
+  let t=document.getElementById('rev-toast');
+  if(!t){t=document.createElement('div');t.id='rev-toast';t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:12px;font-size:14px;z-index:99999;box-shadow:0 8px 30px rgba(0,0,0,.4);transition:opacity .3s;';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(window._revToastT);window._revToastT=setTimeout(()=>{t.style.opacity='0';},3000);
+}
+
+/* ───── Perfil / conta / PWA ───── */
+window.openProfileModal=()=>{const name=document.getElementById('user-name-el').textContent;document.getElementById('profile-name-inp').value=name;const big=document.getElementById('profile-avatar-big');const initials=name.trim().split(/\s+/).filter(Boolean).map(n=>n[0]).join('').toUpperCase().slice(0,2);big.innerHTML=window._profilePhoto?`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:28px;font-weight:700;">${initials}</span>`;document.getElementById('modal-profile').classList.add('open');};
+window.closeProfileModal=()=>document.getElementById('modal-profile').classList.remove('open');
+window.handlePhoto=(input)=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=200;const r=Math.min(max/img.width,max/img.height,1);canvas.width=Math.round(img.width*r);canvas.height=Math.round(img.height*r);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);window._profilePhoto=canvas.toDataURL('image/jpeg',.75);document.getElementById('profile-avatar-big').innerHTML=`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;setAvatar(document.getElementById('user-name-el').textContent,window._profilePhoto);};img.src=e.target.result;};reader.readAsDataURL(file);};
+window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null},{merge:true});setAvatar(name,window._profilePhoto);closeProfileModal();}catch(e){bzAlert('Erro ao salvar perfil',(e.code||e.message||'desconhecido'),'danger');}};
+window.doLogout=async()=>{closeProfileModal();const{signOut}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");await signOut(auth);window.location.href='https://focadus.com.br/';};
+let _deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_deferredPrompt=e;const b=document.getElementById('install-btn');if(b)b.style.display='flex';});
+window.installPWA=async()=>{if(!_deferredPrompt)return;_deferredPrompt.prompt();const{outcome}=await _deferredPrompt.userChoice;if(outcome==='accepted')_deferredPrompt=null;};
+</script>
+</body>
+</html>
