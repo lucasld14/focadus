@@ -43,6 +43,9 @@
 .materia-card{
   position:relative;overflow:hidden;cursor:pointer;
   min-height:180px;padding:1.5rem;border-radius:22px;
+  /* reserva para navegadores sem color-mix(): o card ainda aparece com a superfície padrão */
+  background:var(--surface);
+  border:1px solid var(--border);
   background:linear-gradient(150deg,color-mix(in srgb,var(--mc) 18%,var(--surface)),var(--surface) 70%);
   border:1px solid color-mix(in srgb,var(--mc) 30%,transparent);
   display:flex;flex-direction:column;
@@ -417,7 +420,9 @@ onAuthStateChanged(auth,async user=>{
     const ss=await getDoc(doc(db,`users/${cu.uid}/data`,'subjects'));
     subjects=ss.exists()?ss.data().list||[]:[];
   }catch(e){subjects=[];}
-  await loadContexto();
+  // Cronograma e horas por matéria só são usados ao abrir uma revisão — carrega em
+  // paralelo para a lista aparecer na hora, sem esperar a leitura das sessões.
+  loadContexto();
   await loadConteudos();
 });
 
