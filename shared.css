@@ -401,9 +401,11 @@ body::before{
   border-radius:var(--ri);padding:12px 15px;
   color:var(--text);font-size:14px;font-family:var(--font);
   outline:none;transition:all var(--t) ease;
+  color-scheme:dark;/* faz o menu nativo do <select> (e outros controles do SO) usar cores escuras, senão fica ilegível */
 }
 .modal-input:hover{border-color:var(--border-hover);}
 .modal-input:focus{border-color:rgba(39,76,119,.5);background:rgba(39,76,119,.04);box-shadow:0 0 0 3px rgba(39,76,119,.12);}
+[data-theme="light"] .modal-input{color-scheme:light;}
 
 .modal-btns{display:flex;gap:8px;margin-top:1.5rem;}
 
