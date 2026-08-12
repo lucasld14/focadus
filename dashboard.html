@@ -24,6 +24,29 @@
 .today-panel{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.25rem;}
 @media(max-width:700px){.today-panel{grid-template-columns:1fr;}}
 
+/* Faixa de revisões pendentes */
+.rev-hoje{
+  display:flex;align-items:center;gap:14px;
+  background:linear-gradient(100deg,rgba(198,154,58,.14),rgba(198,154,58,.04) 60%,var(--surface));
+  border:1px solid rgba(198,154,58,.28);
+  border-radius:16px;padding:1rem 1.25rem;margin-bottom:1.25rem;
+  text-decoration:none;color:var(--text);
+  transition:transform .2s var(--ease-out),box-shadow .2s,border-color .2s;
+  animation:fadeUp .5s var(--ease-out) .08s both;
+}
+.rev-hoje:hover{transform:translateY(-2px);border-color:#C69A3A;box-shadow:0 10px 30px -10px rgba(198,154,58,.5);}
+.rev-hoje-ico{width:42px;height:42px;border-radius:12px;background:rgba(198,154,58,.16);color:#C69A3A;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.rev-hoje-tit{font-family:var(--font-d);font-size:16px;font-weight:700;letter-spacing:-.2px;}
+.rev-hoje-sub{font-size:12.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rev-hoje-cta{display:inline-flex;align-items:center;gap:6px;background:#C69A3A;color:#fff;font-size:13px;font-weight:600;padding:8px 16px;border-radius:10px;flex-shrink:0;}
+@media(max-width:560px){
+  .rev-hoje{padding:.9rem 1rem;gap:11px;}
+  .rev-hoje-ico{width:36px;height:36px;}
+  .rev-hoje-tit{font-size:14.5px;}
+  .rev-hoje-cta{padding:8px 12px;font-size:12px;}
+  .rev-hoje-cta span{display:none;}
+}
+
 /* Painel de distribuição por matéria (gráfico de pizza) */
 .share-panel{margin-bottom:1.25rem;}
 .pie-period{display:inline-flex;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;}
@@ -173,6 +196,18 @@
     <div class="metric-card fade-up d3"><div class="metric-label">Este mês</div><div class="metric-val" id="m-month">0h 0m</div><div class="metric-sub" id="m-month-sub"></div></div>
     <div class="metric-card fade-up d4"><div class="metric-label">Total geral</div><div class="metric-val" id="m-total">0h 0m</div><div class="metric-sub">desde o início</div></div>
   </div>
+
+  <!-- Revisões de hoje (só aparece quando há algo a revisar) -->
+  <a class="rev-hoje" id="rev-hoje" href="revisoes.html" style="display:none;">
+    <div class="rev-hoje-ico">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 8v4l3 2"/></svg>
+    </div>
+    <div style="flex:1;min-width:0;">
+      <div class="rev-hoje-tit" id="rev-hoje-tit">—</div>
+      <div class="rev-hoje-sub" id="rev-hoje-sub">—</div>
+    </div>
+    <span class="rev-hoje-cta">Revisar<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></span>
+  </a>
 
   <!-- Distribuição por matéria (destaque + compartilhável) -->
   <div class="panel share-panel fade-up d2" id="share-panel">
@@ -478,7 +513,32 @@ onAuthStateChanged(auth,async user=>{
     updateAll();
   });
   schedule20hNotification();
+  carregarRevisoesHoje();// em paralelo: não segura o resto do painel
 });
+
+/* Faixa "revisões de hoje" — some quando não há nada pendente */
+async function carregarRevisoesHoje(){
+  const faixa=document.getElementById('rev-hoje');
+  if(!faixa)return;
+  try{
+    const snap=await getDocs(collection(db,`users/${cu.uid}/revisoes`));
+    const hoje=localStr(now());
+    const devendo=snap.docs.map(d=>d.data()).filter(c=>(c.nextReview||hoje)<=hoje);
+    if(!devendo.length){faixa.style.display='none';return;}
+    const atrasadas=devendo.filter(c=>(c.nextReview||hoje)<hoje).length;
+    const n=devendo.length;
+    document.getElementById('rev-hoje-tit').textContent=
+      n===1?'1 conteúdo para revisar':`${n} conteúdos para revisar`;
+    const materias=[...new Set(devendo.map(c=>c.materia||'Sem matéria'))];
+    const lista=materias.slice(0,3).join(' · ')+(materias.length>3?` +${materias.length-3}`:'');
+    document.getElementById('rev-hoje-sub').textContent=
+      atrasadas?`${lista} — ${atrasadas} em atraso`:lista;
+    faixa.style.display='flex';
+  }catch(e){
+    console.warn('[revisoes hoje]',e);
+    faixa.style.display='none';// sem revisões cadastradas ou sem permissão: apenas não mostra
+  }
+}
 
 function setAvatar(name,photo){
   const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);

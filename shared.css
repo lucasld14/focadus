@@ -489,14 +489,17 @@ body::before{
 .cards-grid .metric-card:nth-child(4){animation:fadeUp .5s var(--ease-out) .22s both;}
 .panel{animation:fadeUp .5s var(--ease-out) .2s both;}
 
-/* Sidebar stagger */
-.nav-item:nth-child(1){animation:slideLeft .4s var(--ease-out) .06s both;}
-.nav-item:nth-child(2){animation:slideLeft .4s var(--ease-out) .1s both;}
-.nav-item:nth-child(3){animation:slideLeft .4s var(--ease-out) .14s both;}
-.nav-item:nth-child(4){animation:slideLeft .4s var(--ease-out) .18s both;}
-.nav-item:nth-child(5){animation:slideLeft .4s var(--ease-out) .22s both;}
-.nav-item:nth-child(6){animation:slideLeft .4s var(--ease-out) .26s both;}
-.nav-item:nth-child(7){animation:slideLeft .4s var(--ease-out) .30s both;}
+/* Sidebar stagger — nth-of-type conta só os <a>, ignorando .logo e .nav-bottom.
+   Com nth-child o logo ocupava a 1ª posição e a última aba ficava sem animação. */
+.nav-item:nth-of-type(1){animation:slideLeft .4s var(--ease-out) .06s both;}
+.nav-item:nth-of-type(2){animation:slideLeft .4s var(--ease-out) .10s both;}
+.nav-item:nth-of-type(3){animation:slideLeft .4s var(--ease-out) .14s both;}
+.nav-item:nth-of-type(4){animation:slideLeft .4s var(--ease-out) .18s both;}
+.nav-item:nth-of-type(5){animation:slideLeft .4s var(--ease-out) .22s both;}
+.nav-item:nth-of-type(6){animation:slideLeft .4s var(--ease-out) .26s both;}
+.nav-item:nth-of-type(7){animation:slideLeft .4s var(--ease-out) .30s both;}
+.nav-item:nth-of-type(8){animation:slideLeft .4s var(--ease-out) .34s both;}
+.nav-item:nth-of-type(9){animation:slideLeft .4s var(--ease-out) .38s both;}
 
 .fade-up{animation:fadeUp .5s var(--ease-out) both;}
 .d1{animation-delay:.05s;}.d2{animation-delay:.11s;}.d3{animation-delay:.17s;}.d4{animation-delay:.23s;}
@@ -681,4 +684,36 @@ body::before{
   .metric-card:active{transform:scale(.97);transition:transform .1s;}
   .main,.modal-box{-webkit-overflow-scrolling:touch;}
   .install-btn,#install-btn,#install-btn-profile{display:none!important;}
+}
+
+/* ══════════════════════ POLIMENTO GLOBAL ══════════════════════ */
+
+/* Resposta ao toque/clique: dá a sensação de que o elemento "afunda" */
+.btn-primary:active,.btn-secondary:active,.add-btn:active,.install-btn:active,
+.account-action-btn:active,.filter-btn:active{transform:scale(.97);}
+.btn-primary,.btn-secondary,.add-btn,.install-btn,.account-action-btn,.filter-btn{
+  transition:transform .13s var(--ease-out),background .18s,border-color .18s,color .18s,box-shadow .18s;
+}
+
+/* Foco visível para quem navega pelo teclado (não aparece no clique de mouse) */
+.btn-primary:focus-visible,.btn-secondary:focus-visible,.add-btn:focus-visible,
+.nav-item:focus-visible,.install-btn:focus-visible,.filter-btn:focus-visible,
+.account-action-btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:2px solid #C69A3A;outline-offset:2px;
+}
+
+/* Cartões e painéis reagem de forma suave */
+.metric-card,.panel{transition:transform .2s var(--ease-out),border-color .2s,box-shadow .2s;}
+.metric-card:hover{transform:translateY(-2px);border-color:var(--border-hover);}
+
+/* Respeita quem pediu menos animação no sistema (evita enjoo/desconforto).
+   Mantém as transições curtas, mas remove os movimentos de entrada. */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+  .main,.panel,.nav-item,.fade-up,.metric-card{animation:none!important;opacity:1!important;transform:none!important;}
 }

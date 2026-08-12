@@ -59,7 +59,16 @@
 .block-move{position:absolute;top:5px;right:25px;width:16px;height:16px;border-radius:4px;background:transparent;border:none;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s,color .15s;padding:0;}
 .block-item:hover .block-move{opacity:1;}
 .block-move:hover{background:rgba(198,154,58,.22);color:#C69A3A;}
-.move-pop{position:absolute;z-index:60;top:24px;right:4px;background:var(--surface);border:1px solid var(--border-hover);border-radius:10px;padding:5px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:2px;min-width:96px;}
+/* Fixo em relação à janela: assim nunca é cortado por nenhum container */
+.move-pop{position:fixed;z-index:9000;background:var(--surface);border:1px solid var(--border-hover);border-radius:10px;padding:5px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:2px;width:170px;max-height:70vh;overflow-y:auto;}
+.move-opt:disabled{opacity:.35;cursor:default;}
+.move-opt:disabled:hover{background:none;color:var(--text);}
+/* Arrastar para reordenar */
+.block-item[draggable="true"]{cursor:grab;}
+.block-item.arrastando{opacity:.4;cursor:grabbing;}
+.block-item.drop-antes{box-shadow:inset 0 3px 0 -1px #C69A3A;}
+.block-item.drop-depois{box-shadow:inset 0 -3px 0 -1px #C69A3A;}
+.day-col.drop-alvo{border-color:#C69A3A;background:rgba(198,154,58,.06);}
 .move-pop-tit{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:3px 7px 4px;}
 .move-opt{background:none;border:none;color:var(--text);text-align:left;font-size:12px;font-family:inherit;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .13s;}
 .move-opt:hover{background:rgba(198,154,58,.16);color:#C69A3A;}
@@ -192,7 +201,7 @@
     <div class="crono-sum-card">
       <div class="crono-sum-label">Realizado</div>
       <div class="crono-sum-val" id="sum-actual">—</div>
-      <div class="crono-sum-sub">sessões registradas</div>
+      <div class="crono-sum-sub">cronômetro + marcados</div>
     </div>
     <div class="crono-sum-card">
       <div class="crono-sum-label">Cumprimento</div>
@@ -350,6 +359,24 @@ function getActual(subjectId,dayIdx){
 /* ───── Marcar como estudado (por data real, não pelo template) ───── */
 function dateKey(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function checkKey(dStr,bl,bi){return dStr+'_'+(bl.id||(bl.subjectId+'_'+bi));}
+/* Realizado do dia = tempo cronometrado (cada matéria contada uma vez) +
+   os minutos planejados dos blocos marcados à mão cuja matéria não teve cronômetro.
+   Assim marcar a caixinha conta como feito, sem somar em dobro com o cronômetro. */
+function realizadoDoDia(blocks,dayIdx,dStr){
+  let secs=0;
+  const jaContou=new Set();
+  blocks.forEach(bl=>{
+    if(jaContou.has(bl.subjectId))return;
+    jaContou.add(bl.subjectId);
+    secs+=getActual(bl.subjectId,dayIdx);
+  });
+  blocks.forEach((bl,bi)=>{
+    if(!checksData[checkKey(dStr,bl,bi)])return;
+    if(getActual(bl.subjectId,dayIdx)>0)return;// o cronômetro já respondeu por essa matéria
+    secs+=(bl.mins||0)*60;
+  });
+  return secs;
+}
 let checksTimer=null;
 function saveChecks(){
   clearTimeout(checksTimer);
@@ -369,21 +396,35 @@ window.toggleFeito=function(key,e){
   renderBoard();
 };
 
-/* ───── Mover bloco para outro dia ───── */
+/* ───── Mover bloco: menu (funciona no toque) + arrastar (mouse) ───── */
 function fecharMover(){document.querySelectorAll('.move-pop').forEach(p=>p.remove());}
 window.abrirMover=function(dayIdx,blockIdx,e){
   e.stopPropagation();
-  const jaAberto=e.currentTarget.parentElement.querySelector('.move-pop');
+  const anterior=document.querySelector('.move-pop');
+  const mesmo=anterior&&anterior.dataset.dia===String(dayIdx)&&anterior.dataset.idx===String(blockIdx);
   fecharMover();closeForm();
-  if(jaAberto)return;// clicar de novo fecha
+  if(mesmo)return;// clicar de novo no mesmo bloco fecha
+  const total=(daysData[dayIdx]||[]).length;
   const pop=document.createElement('div');
   pop.className='move-pop';
+  pop.dataset.dia=dayIdx;pop.dataset.idx=blockIdx;
   pop.onclick=ev=>ev.stopPropagation();
-  pop.innerHTML=`<div class="move-pop-tit">Mover para</div>`+DIAS.map((nome,d)=>
-    d===dayIdx?`<button class="move-opt atual" disabled>${nome} (aqui)</button>`
-              :`<button class="move-opt" onclick="moverBloco(${dayIdx},${blockIdx},${d})">${nome}</button>`
-  ).join('');
-  e.currentTarget.parentElement.appendChild(pop);
+  pop.innerHTML=
+    `<div class="move-pop-tit">Ordem no dia</div>`+
+    `<button class="move-opt"${blockIdx===0?' disabled':''} onclick="moverOrdem(${dayIdx},${blockIdx},-1)">Subir</button>`+
+    `<button class="move-opt"${blockIdx>=total-1?' disabled':''} onclick="moverOrdem(${dayIdx},${blockIdx},1)">Descer</button>`+
+    `<div class="move-pop-tit">Mover para</div>`+
+    DIAS.map((nome,d)=>d===dayIdx
+      ?`<button class="move-opt atual" disabled>${nome} (aqui)</button>`
+      :`<button class="move-opt" onclick="moverBloco(${dayIdx},${blockIdx},${d})">${nome}</button>`).join('');
+  document.body.appendChild(pop);// no body: nenhum container pode cortá-lo
+  const r=e.currentTarget.getBoundingClientRect();
+  const alt=pop.offsetHeight||280,larg=170;
+  let left=Math.min(r.right-larg,window.innerWidth-larg-8);
+  let top=r.bottom+6;
+  if(top+alt>window.innerHeight-8)top=Math.max(8,r.top-alt-6);
+  pop.style.left=Math.max(8,left)+'px';
+  pop.style.top=top+'px';
 };
 window.moverBloco=function(dayIdx,blockIdx,destino){
   const bl=daysData[dayIdx][blockIdx];
@@ -391,10 +432,76 @@ window.moverBloco=function(dayIdx,blockIdx,destino){
   daysData[dayIdx].splice(blockIdx,1);
   daysData[destino]=daysData[destino]||[];
   daysData[destino].push(bl);
-  fecharMover();
-  save();
-  renderBoard();
+  fecharMover();save();renderBoard();
 };
+window.moverOrdem=function(dayIdx,blockIdx,delta){
+  const lista=daysData[dayIdx];
+  const novo=blockIdx+delta;
+  if(!lista||novo<0||novo>=lista.length)return;
+  const [bl]=lista.splice(blockIdx,1);
+  lista.splice(novo,0,bl);
+  fecharMover();save();renderBoard();
+};
+
+/* Arrastar e soltar (mouse): reordena dentro do dia e move entre dias */
+let arrastando=null;
+function limparPistas(){
+  document.querySelectorAll('.drop-antes,.drop-depois').forEach(el=>el.classList.remove('drop-antes','drop-depois'));
+  document.querySelectorAll('.day-col.drop-alvo').forEach(el=>el.classList.remove('drop-alvo'));
+}
+window.blocoDragStart=function(e,dia,idx){
+  arrastando={dia,idx};
+  fecharMover();
+  e.dataTransfer.effectAllowed='move';
+  try{e.dataTransfer.setData('text/plain',dia+':'+idx);}catch(_){}
+  e.currentTarget.classList.add('arrastando');
+};
+window.blocoDragEnd=function(e){
+  e.currentTarget.classList.remove('arrastando');
+  limparPistas();arrastando=null;
+};
+window.blocoDragOver=function(e){
+  if(!arrastando)return;
+  e.preventDefault();e.stopPropagation();
+  e.dataTransfer.dropEffect='move';
+  const r=e.currentTarget.getBoundingClientRect();
+  const depois=(e.clientY-r.top)>r.height/2;
+  e.currentTarget.classList.toggle('drop-depois',depois);
+  e.currentTarget.classList.toggle('drop-antes',!depois);
+};
+window.blocoDragLeave=function(e){e.currentTarget.classList.remove('drop-antes','drop-depois');};
+window.blocoDrop=function(e,dia,idx){
+  if(!arrastando)return;
+  e.preventDefault();e.stopPropagation();
+  const r=e.currentTarget.getBoundingClientRect();
+  const depois=(e.clientY-r.top)>r.height/2;
+  soltarEm(dia,idx+(depois?1:0));
+};
+window.diaDragOver=function(e,dia){
+  if(!arrastando)return;
+  e.preventDefault();
+  e.currentTarget.classList.add('drop-alvo');
+};
+window.diaDragLeave=function(e){e.currentTarget.classList.remove('drop-alvo');};
+window.diaDrop=function(e,dia){
+  if(!arrastando)return;
+  e.preventDefault();
+  soltarEm(dia,(daysData[dia]||[]).length);// soltou no vazio: vai para o fim do dia
+};
+function soltarEm(diaDest,posDest){
+  const org=arrastando;
+  arrastando=null;limparPistas();
+  if(!org)return;
+  const bl=(daysData[org.dia]||[])[org.idx];
+  if(!bl)return;
+  daysData[org.dia].splice(org.idx,1);
+  // Removido antes de inserir: se for no mesmo dia e mais abaixo, o alvo recuou uma posição
+  if(org.dia===diaDest&&org.idx<posDest)posDest--;
+  daysData[diaDest]=daysData[diaDest]||[];
+  const p=Math.max(0,Math.min(posDest,daysData[diaDest].length));
+  daysData[diaDest].splice(p,0,bl);
+  save();renderBoard();
+}
 
 function renderBoard(){
   const wdays=getWeekDays(weekOffset);
@@ -407,12 +514,16 @@ function renderBoard(){
     const tod=isToday(d);
     const blocks=daysData[i]||[];
     const dayMins=blocks.reduce((a,b)=>a+(b.mins||0),0);
-    const dayActSecs=blocks.reduce((a,b)=>a+getActual(b.subjectId,i),0);
+    const dayActSecs=realizadoDoDia(blocks,i,dateKey(d));
     totalMins+=dayMins;totalActSecs+=dayActSecs;
 
     const col=document.createElement('div');
     col.className='day-col'+(tod?' is-today':'');
     col.dataset.day=i;
+    // A coluna inteira é alvo: dá para soltar num espaço vazio do dia
+    col.addEventListener('dragover',ev=>diaDragOver(ev,i));
+    col.addEventListener('dragleave',diaDragLeave);
+    col.addEventListener('drop',ev=>diaDrop(ev,i));
 
     const dStr=dateKey(d);
     const blocksHtml=blocks.map((bl,bi)=>{
@@ -421,7 +532,10 @@ function renderBoard(){
       const bg=esc(sub.color)+'1a';
       const ck=checkKey(dStr,bl,bi);
       const feito=!!checksData[ck];
-      return `<div class="block-item${feito?' feito':''}" style="background:${bg}" onclick="openEditBlock(${i},${bi},event)">
+      return `<div class="block-item${feito?' feito':''}" style="background:${bg}" onclick="openEditBlock(${i},${bi},event)"
+        draggable="true"
+        ondragstart="blocoDragStart(event,${i},${bi})" ondragend="blocoDragEnd(event)"
+        ondragover="blocoDragOver(event)" ondragleave="blocoDragLeave(event)" ondrop="blocoDrop(event,${i},${bi})">
         <div class="block-color-bar" style="background:${esc(sub.color)}"></div>
         <div class="block-top">
           <button class="block-check${feito?' feito':''}" onclick="toggleFeito('${esc(ck)}',event)" title="${feito?'Marcado como estudado':'Marcar como estudado'}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>

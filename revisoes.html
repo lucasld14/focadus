@@ -38,6 +38,17 @@
 .due-atrasada{background:rgba(226,75,74,.12);color:var(--red);}
 .due-hoje{background:rgba(239,159,39,.14);color:var(--amber);}
 
+/* Entrada em cascata dos cards */
+@keyframes revUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+.materia-card,.cont-card,.mem-card{animation:revUp .42s cubic-bezier(.22,1,.36,1) both;}
+.materia-card:nth-child(1),.cont-card:nth-child(1),.mem-card:nth-child(1){animation-delay:.02s;}
+.materia-card:nth-child(2),.cont-card:nth-child(2),.mem-card:nth-child(2){animation-delay:.07s;}
+.materia-card:nth-child(3),.cont-card:nth-child(3),.mem-card:nth-child(3){animation-delay:.12s;}
+.materia-card:nth-child(4),.cont-card:nth-child(4),.mem-card:nth-child(4){animation-delay:.17s;}
+.materia-card:nth-child(5),.cont-card:nth-child(5){animation-delay:.22s;}
+.materia-card:nth-child(6),.cont-card:nth-child(6){animation-delay:.26s;}
+.materia-card:nth-child(n+7),.cont-card:nth-child(n+7){animation-delay:.30s;}
+
 /* Cards grandes de matéria */
 .materia-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:1.5rem;}
 .materia-card{
