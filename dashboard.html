@@ -215,7 +215,8 @@
       <span class="panel-title">Suas horas por matéria</span>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <div class="pie-period">
-          <button class="pie-per-btn on" data-per="week" onclick="setPiePeriod('week',this)">Semana</button>
+          <button class="pie-per-btn on" data-per="hoje" onclick="setPiePeriod('hoje',this)">Hoje</button>
+          <button class="pie-per-btn" data-per="week" onclick="setPiePeriod('week',this)">Semana</button>
           <button class="pie-per-btn" data-per="month" onclick="setPiePeriod('month',this)">Mês</button>
           <button class="pie-per-btn" data-per="all" onclick="setPiePeriod('all',this)">Geral</button>
         </div>
@@ -638,13 +639,14 @@ function gD(s){return s.startedAt.toDate?s.startedAt.toDate():new Date(s.started
 function localStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 
 /* ═══ Gráfico de pizza por matéria (+ imagem compartilhável) ═══ */
-let piePeriod='week';
-const PERIODO_LBL={week:'na semana',month:'no mês',all:'no total'};
-const PERIODO_TIT={week:'Últimos 7 dias',month:'Este mês',all:'Desde o início'};
+let piePeriod='hoje';
+const PERIODO_LBL={hoje:'hoje',week:'na semana',month:'no mês',all:'no total'};
+const PERIODO_TIT={hoje:'Hoje',week:'Últimos 7 dias',month:'Este mês',all:'Desde o início'};
 function pieData(){
   const n=now();
   let inicio=null;
-  if(piePeriod==='week'){inicio=new Date(n);inicio.setHours(0,0,0,0);inicio.setDate(inicio.getDate()-6);}
+  if(piePeriod==='hoje'){inicio=new Date(n);inicio.setHours(0,0,0,0);}
+  else if(piePeriod==='week'){inicio=new Date(n);inicio.setHours(0,0,0,0);inicio.setDate(inicio.getDate()-6);}
   else if(piePeriod==='month'){inicio=new Date(n.getFullYear(),n.getMonth(),1);}
   const porMat={};
   sessions.forEach(s=>{
@@ -668,7 +670,7 @@ function renderPie(){
   document.getElementById('pie-total-lbl').textContent=PERIODO_LBL[piePeriod];
   if(!total){
     svg.innerHTML='<circle cx="100" cy="100" r="72" fill="none" stroke="var(--border)" stroke-width="26"/>';
-    leg.innerHTML='<div class="pie-empty">Nenhuma sessão neste período.<br>Estude para ver seu gráfico!</div>';
+    leg.innerHTML=`<div class="pie-empty">${piePeriod==='hoje'?'Você ainda não estudou hoje.<br>Comece pelo cronômetro!':'Nenhuma sessão neste período.<br>Estude para ver seu gráfico!'}</div>`;
     return;
   }
   // Fatias como arcos de um círculo (stroke-dasharray), sem biblioteca externa
@@ -706,6 +708,7 @@ function rrect(x,px,py,w,h,r){// roundRect manual (nem todo navegador tem ctx.ro
 function periodoRange(){
   const n=now();
   const d=(dt)=>dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}).replace('.','');
+  if(piePeriod==='hoje')return n.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
   if(piePeriod==='week'){const i=new Date(n);i.setDate(i.getDate()-6);return`${d(i)} — ${d(n)}`;}
   if(piePeriod==='month')return n.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   return'Desde o início';
@@ -720,104 +723,110 @@ function drawShareImage(){
     itens=itens.slice(0,5).concat([{nome:'Outras matérias',cor:'#8D97A5',secs:resto,pct:total?resto/total*100:0}]);
   }
   const dominante=raw.itens[0]?raw.itens[0].cor:'#C69A3A';
-  const S=1080,cv=document.createElement('canvas');
+  const S=1080,M=96,cv=document.createElement('canvas');// M = margem interna do conteúdo
   cv.width=S;cv.height=S;
   const x=cv.getContext('2d');
+  const SANS='"DM Sans", system-ui, sans-serif', DISP='Manrope, system-ui, sans-serif';
 
-  // ── Fundo com brilho na cor da matéria dominante
+  // ── Fundo: base escura + brilho suave na cor da matéria dominante
   x.fillStyle='#0E1117';x.fillRect(0,0,S,S);
-  const g=x.createRadialGradient(S/2,400,30,S/2,400,760);
-  g.addColorStop(0,dominante+'2e');g.addColorStop(1,'rgba(14,17,23,0)');
+  const g=x.createRadialGradient(S/2,392,20,S/2,392,660);
+  g.addColorStop(0,dominante+'26');g.addColorStop(1,'rgba(14,17,23,0)');
   x.fillStyle=g;x.fillRect(0,0,S,S);
-  // Moldura sutil
-  x.strokeStyle='rgba(255,255,255,0.07)';x.lineWidth=2;
-  rrect(x,36,36,S-72,S-72,44);x.stroke();
+  x.strokeStyle='rgba(255,255,255,0.06)';x.lineWidth=2;
+  rrect(x,32,32,S-64,S-64,52);x.stroke();
 
-  // ── Cabeçalho: logo (onda) + marca
+  // ── Marca discreta no topo
   x.save();
-  x.translate(S/2-118,74);x.scale(1.35,1.35);
-  x.strokeStyle='#C69A3A';x.lineWidth=2.5;x.lineCap='round';
+  x.translate(S/2-96,66);x.scale(1.1,1.1);
+  x.strokeStyle='#C69A3A';x.lineWidth=2.6;x.lineCap='round';
   x.beginPath();
   x.moveTo(4,24);x.bezierCurveTo(9,24,13,6,18,6);x.bezierCurveTo(23,6,27,24,32,24);x.bezierCurveTo(37,24,41,6,46,6);
   x.stroke();
   x.fillStyle='#F4E3A7';x.beginPath();x.arc(46,6,4,0,Math.PI*2);x.fill();
   x.restore();
   x.textAlign='left';
-  x.fillStyle='#F0EDE4';x.font='800 44px Manrope, system-ui, sans-serif';
-  x.fillText('Foca',S/2-30,112);
-  const wFoca=x.measureText('Foca').width;
-  x.fillStyle='#C69A3A';x.fillText('dus',S/2-30+wFoca,112);
+  x.fillStyle='#F0EDE4';x.font='800 32px '+DISP;
+  x.fillText('Foca',S/2-38,96);
+  x.fillStyle='#C69A3A';x.fillText('dus',S/2-38+x.measureText('Foca').width,96);
 
-  // ── Título do período
+  // ── Período
   x.textAlign='center';
-  x.fillStyle='#F0EDE4';x.font='700 34px Manrope, system-ui, sans-serif';
-  x.fillText(PERIODO_TIT[piePeriod],S/2,182);
-  x.fillStyle='#8D97A5';x.font='500 23px "DM Sans", system-ui, sans-serif';
-  x.fillText(periodoRange(),S/2,218);
+  x.fillStyle='#F0EDE4';x.font='800 46px '+DISP;
+  x.fillText(PERIODO_TIT[piePeriod],S/2,176);
+  x.fillStyle='#7E8896';x.font='500 22px '+SANS;
+  x.fillText(periodoRange(),S/2,212);
 
-  // ── Rosca (com pequenos vãos entre as fatias)
-  const cx=S/2,cy=452,R=158,W=56;
-  x.lineCap='butt';
-  if(!total){
-    x.strokeStyle='rgba(255,255,255,0.07)';x.lineWidth=W;
-    x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.stroke();
-  }else{
-    const vao=itens.length>1?0.022:0;// radianos
+  // ── Rosca: trilho de fundo + fatias com pontas arredondadas
+  const cx=S/2,cy=422,R=136,W=44;
+  x.strokeStyle='rgba(255,255,255,0.05)';x.lineWidth=W;
+  x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.stroke();
+  if(total){
+    const varias=itens.length>1;
+    x.lineCap=varias?'round':'butt';
+    const vao=varias?0.05:0;
     let ang=-Math.PI/2;
     itens.forEach(it=>{
       const sweep=it.pct/100*Math.PI*2;
-      if(sweep>vao){
+      if(sweep>vao*1.2){
         x.strokeStyle=it.cor;x.lineWidth=W;
         x.beginPath();x.arc(cx,cy,R,ang+vao/2,ang+sweep-vao/2);x.stroke();
       }
       ang+=sweep;
     });
+    x.lineCap='butt';
   }
-  // Centro
-  x.fillStyle='#F0EDE4';x.font='800 74px Manrope, system-ui, sans-serif';
-  x.fillText(total?fmt(total):'0h 0m',cx,cy+14);
-  x.fillStyle='#8D97A5';x.font='500 22px "DM Sans", system-ui, sans-serif';
-  x.fillText('estudados',cx,cy+54);
+  // Centro: o número é o herói da imagem
+  x.textAlign='center';
+  x.fillStyle='#F5F4F1';x.font='800 68px '+DISP;
+  x.fillText(total?fmt(total):'0h 0m',cx,cy+10);
+  x.fillStyle='#7E8896';x.font='500 20px '+SANS;
+  x.fillText('estudados',cx,cy+46);
 
-  // ── Legenda
-  let ly=706;
+  // ── Legenda: nome · tempo · % com barra proporcional
+  let ly=632;
   if(!itens.length){
-    x.fillStyle='#8D97A5';x.font='500 26px "DM Sans", system-ui, sans-serif';
-    x.fillText('Nenhuma sessão neste período',S/2,ly+20);
+    x.fillStyle='#7E8896';x.font='500 25px '+SANS;
+    x.fillText(piePeriod==='hoje'?'Nenhuma sessão registrada hoje':'Nenhuma sessão neste período',S/2,ly+40);
   }else{
+    const maxPct=Math.max(...itens.map(i=>i.pct),1);
     itens.forEach(it=>{
       x.textAlign='left';
-      x.fillStyle=it.cor;rrect(x,132,ly-17,20,20,6);x.fill();
-      x.fillStyle='#F0EDE4';x.font='500 26px "DM Sans", system-ui, sans-serif';
-      const nome=it.nome.length>24?it.nome.slice(0,23)+'…':it.nome;
-      x.fillText(nome,168,ly);
+      x.fillStyle=it.cor;rrect(x,M,ly-16,14,14,4);x.fill();
+      x.fillStyle='#EDECE8';x.font='500 25px '+SANS;
+      const nome=it.nome.length>22?it.nome.slice(0,21)+'…':it.nome;
+      x.fillText(nome,M+26,ly);
       x.textAlign='right';
-      x.fillStyle=it.cor;x.font='600 26px "DM Sans", system-ui, sans-serif';
-      x.fillText(`${Math.round(it.pct)}%`,S-132,ly);
-      x.fillStyle='#8D97A5';x.font='500 24px "DM Sans", system-ui, sans-serif';
-      x.fillText(fmt(it.secs),S-206,ly);
-      ly+=48;
+      x.fillStyle=it.cor;x.font='700 25px '+DISP;
+      x.fillText(Math.round(it.pct)+'%',S-M,ly);
+      x.fillStyle='#7E8896';x.font='500 22px '+SANS;
+      x.fillText(fmt(it.secs),S-M-86,ly);
+      // barra proporcional (a maior matéria ocupa a largura toda)
+      const larg=S-M*2, prop=Math.max(.02,it.pct/maxPct);
+      x.fillStyle='rgba(255,255,255,0.06)';rrect(x,M,ly+12,larg,6,3);x.fill();
+      x.fillStyle=it.cor;rrect(x,M,ly+12,larg*prop,6,3);x.fill();
+      ly+=54;
     });
   }
 
-  // ── Rodapé: nome + sequência + site
+  // ── Rodapé
   const nomeEl=document.getElementById('user-name-el');
   const nomeUser=(nomeEl?nomeEl.textContent:'').trim().split(/\s+/)[0]||'';
   const streakEl=document.getElementById('streak-big');
   const streak=parseInt(streakEl?streakEl.textContent:'0')||0;
-  x.strokeStyle='rgba(255,255,255,0.08)';x.lineWidth=1.5;
-  x.beginPath();x.moveTo(132,952);x.lineTo(S-132,952);x.stroke();
+  x.strokeStyle='rgba(255,255,255,0.07)';x.lineWidth=1.5;
+  x.beginPath();x.moveTo(M,944);x.lineTo(S-M,944);x.stroke();
   x.textAlign='left';
-  x.fillStyle='#F0EDE4';x.font='600 25px "DM Sans", system-ui, sans-serif';
-  if(nomeUser)x.fillText(nomeUser,132,996);
+  x.fillStyle='#EDECE8';x.font='600 24px '+SANS;
+  if(nomeUser)x.fillText(nomeUser,M,988);
   if(streak>0){
     x.textAlign='right';
-    x.fillStyle='#C69A3A';x.font='600 25px "DM Sans", system-ui, sans-serif';
-    x.fillText(`${streak} dia${streak===1?'':'s'} seguido${streak===1?'':'s'}`,S-132,996);
+    x.fillStyle='#C69A3A';x.font='600 24px '+SANS;
+    x.fillText(streak+(streak===1?' dia seguido':' dias seguidos'),S-M,988);
   }
   x.textAlign='center';
-  x.fillStyle='rgba(198,154,58,0.75)';x.font='600 22px "DM Sans", system-ui, sans-serif';
-  x.fillText('focadus.com.br',S/2,1032);
+  x.fillStyle='rgba(198,154,58,0.7)';x.font='600 21px '+SANS;
+  x.fillText('focadus.com.br',S/2,1026);
   return cv;
 }
 window.sharePie=async()=>{
