@@ -41,6 +41,7 @@
 .day-col.is-today .day-name{color:var(--blue);}
 .day-date{font-size:12px;font-weight:600;margin-top:2px;color:var(--text);}
 .day-total{font-size:10px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;}
+.day-dots{display:none;}/* só aparece no celular, onde o quadro vira carrossel */
 
 /* Blocks */
 .blocks-list{display:flex;flex-direction:column;gap:6px;min-height:4px;}
@@ -51,7 +52,6 @@
 .block-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px;margin-bottom:3px;}
 .block-hours{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
 .block-hours-val{font-weight:600;color:var(--text);}
-.block-actual{font-size:10px;color:var(--green);font-weight:500;}
 .block-del{position:absolute;top:5px;right:5px;width:16px;height:16px;border-radius:4px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s;}
 .block-item:hover .block-del{opacity:1;}
 .block-del:hover{background:rgba(255,80,80,.2);color:#ff5050;}
@@ -126,12 +126,27 @@
     -webkit-overflow-scrolling:touch;
   }
   .board::-webkit-scrollbar{display:none;}
+  /* Um dia por tela: o dedo desliza para o próximo, como um carrossel */
   .day-col{
-    min-width:200px;
+    min-width:100%;
     flex-shrink:0;
-    scroll-snap-align:start;
+    scroll-snap-align:center;
+    scroll-snap-stop:always;
     display:flex!important; /* cancela os nth-child:display:none anteriores */
+    padding:14px;
   }
+  .day-header{padding-bottom:12px;}
+  .day-name{font-size:14px;}
+  .day-date{font-size:19px;margin-top:3px;}
+  .day-total{font-size:12px;margin-top:5px;}
+  .block-item{padding:12px 11px;}
+  .block-name{font-size:13.5px;}
+  .block-hours{font-size:12px;}
+  .add-block-btn{padding:12px;font-size:13px;}
+  /* Indicador de qual dia está aberto */
+  .day-dots{display:flex;justify-content:center;gap:7px;margin-top:14px;}
+  .day-dot{width:7px;height:7px;border-radius:50%;background:var(--border-hover);transition:all .22s;border:none;padding:0;cursor:pointer;}
+  .day-dot.on{background:var(--accent);width:22px;border-radius:4px;}
   .crono-summary{grid-template-columns:1fr 1fr;}
   .week-label{display:none;}
   .wnav-today{font-size:11px;padding:4px 10px;}
@@ -211,6 +226,7 @@
   </div>
 
   <div class="board" id="board"></div>
+  <div class="day-dots" id="day-dots"></div>
 </main>
 
 <!-- MODAL PERFIL -->
@@ -252,6 +268,7 @@ let cu,subjects=[],weekOffset=0;
 let daysData={0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
 let actualData={};
 let checksData={};// {"AAAA-MM-DD_<idDoBloco>": true} — o que já foi estudado, por data real
+let primeiraCarga=true;
 
 const DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 let activeFormEl=null;
@@ -334,6 +351,8 @@ async function loadWeek(){
     });
 
     renderBoard();
+    // Na abertura, já posiciona no dia de hoje (no celular o quadro é um carrossel)
+    if(primeiraCarga){primeiraCarga=false;setTimeout(irParaHoje,60);}
   }catch(e){
     console.error('loadWeek',e);
     const board=document.getElementById('board');
@@ -395,6 +414,56 @@ window.toggleFeito=function(key,e){
   saveChecks();
   renderBoard();
 };
+
+/* ───── Carrossel de dias (celular): um dia por tela ───── */
+function ehCarrossel(){return window.matchMedia('(max-width:600px)').matches;}
+function renderDayDots(){
+  const dots=document.getElementById('day-dots');
+  const board=document.getElementById('board');
+  if(!dots||!board)return;
+  if(!ehCarrossel()){dots.innerHTML='';return;}
+  dots.innerHTML=DIAS.map((nome,i)=>`<button class="day-dot" aria-label="Ir para ${nome}" onclick="irParaDia(${i})"></button>`).join('');
+  marcarDiaAtivo();
+}
+function diaVisivel(){
+  const board=document.getElementById('board');
+  if(!board)return 0;
+  const col=board.querySelector('.day-col');
+  if(!col)return 0;
+  const passo=col.offsetWidth+8;// largura da coluna + gap
+  return Math.max(0,Math.min(6,Math.round(board.scrollLeft/passo)));
+}
+function marcarDiaAtivo(){
+  const dots=document.getElementById('day-dots');
+  if(!dots||!dots.children.length)return;
+  const at=diaVisivel();
+  [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===at));
+}
+window.irParaDia=function(i){
+  const board=document.getElementById('board');
+  const col=board&&board.querySelectorAll('.day-col')[i];
+  if(!col)return;
+  board.scrollTo({left:col.offsetLeft-board.offsetLeft,behavior:'smooth'});
+};
+function irParaHoje(){
+  if(!ehCarrossel())return;
+  const hoje=new Date();
+  const dow=hoje.getDay();
+  const idx=dow===0?6:dow-1;// 0=Seg
+  const board=document.getElementById('board');
+  const col=board&&board.querySelectorAll('.day-col')[idx];
+  if(!col)return;
+  board.scrollLeft=col.offsetLeft-board.offsetLeft;// sem animação na abertura
+  marcarDiaAtivo();
+}
+(function(){
+  const board=document.getElementById('board');
+  if(board)board.addEventListener('scroll',()=>{
+    clearTimeout(window._dotTimer);
+    window._dotTimer=setTimeout(marcarDiaAtivo,60);
+  },{passive:true});
+  window.addEventListener('resize',()=>{renderDayDots();});
+})();
 
 /* ───── Mover bloco: menu (funciona no toque) + arrastar (mouse) ───── */
 function fecharMover(){document.querySelectorAll('.move-pop').forEach(p=>p.remove());}
@@ -528,7 +597,6 @@ function renderBoard(){
     const dStr=dateKey(d);
     const blocksHtml=blocks.map((bl,bi)=>{
       const sub=subjects.find(x=>x.id===bl.subjectId)||{name:bl.name||'?',color:'#C69A3A'};
-      const actSecs=getActual(bl.subjectId,i);
       const bg=esc(sub.color)+'1a';
       const ck=checkKey(dStr,bl,bi);
       const feito=!!checksData[ck];
@@ -543,7 +611,6 @@ function renderBoard(){
         </div>
         <div class="block-hours">
           <span class="block-hours-val">${fmtHm(bl.mins||0)}</span>
-          ${actSecs?`<span class="block-actual">· ${fmtH(actSecs)} feito</span>`:''}
         </div>
         <button class="block-move" onclick="abrirMover(${i},${bi},event)" title="Mover para outro dia"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/><polyline points="15 18 21 12 15 6"/></svg></button>
         <button class="block-del" onclick="removeBlock(${i},${bi},event)" title="Remover">×</button>
@@ -554,7 +621,7 @@ function renderBoard(){
       <div class="day-header">
         <div class="day-name">${DIAS[i]}</div>
         <div class="day-date">${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</div>
-        ${dayMins?`<div class="day-total">${fmtHm(dayMins)}${dayActSecs?' · '+fmtH(dayActSecs)+' feito':''}</div>`:''}
+        ${dayMins?`<div class="day-total">${fmtHm(dayMins)}</div>`:''}
       </div>
       <div class="blocks-list" id="bl-${i}">${blocksHtml}</div>
       <button class="add-block-btn" onclick="showAddForm(${i})">
@@ -576,6 +643,7 @@ function renderBoard(){
     document.getElementById('sum-pct').textContent='—';
     document.getElementById('sum-pct').style.color='';
   }
+  renderDayDots();
 }
 
 function closeForm(){
