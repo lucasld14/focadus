@@ -24,6 +24,35 @@
 .today-panel{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.25rem;}
 @media(max-width:700px){.today-panel{grid-template-columns:1fr;}}
 
+/* Sequência: aviso de risco, recorde, marcos e escudos */
+.streak-risco{
+  display:flex;align-items:center;gap:14px;
+  background:linear-gradient(100deg,rgba(197,74,74,.16),rgba(197,74,74,.05) 60%,var(--surface));
+  border:1px solid rgba(197,74,74,.34);
+  border-radius:16px;padding:1rem 1.25rem;margin-bottom:1.25rem;
+  animation:fadeUp .5s var(--ease-out) both;
+}
+.risco-ico{width:42px;height:42px;border-radius:12px;background:rgba(197,74,74,.18);color:#E06A6A;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.risco-txt{font-family:var(--font-d);font-size:15.5px;font-weight:600;}
+.risco-sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+.risco-cta{display:inline-flex;align-items:center;background:#C54A4A;color:#fff;font-size:13px;font-weight:600;padding:9px 17px;border-radius:10px;text-decoration:none;flex-shrink:0;transition:filter .18s;}
+.risco-cta:hover{filter:brightness(1.12);}
+.streak-recorde{font-size:12px;color:var(--muted);margin-top:8px;}
+.streak-marco{font-size:11.5px;color:var(--accent);margin-top:3px;}
+.escudos-row{display:flex;align-items:center;gap:5px;margin-top:11px;flex-wrap:wrap;}
+.escudo{width:19px;height:19px;color:var(--border-hover);flex-shrink:0;}
+.escudo.on{color:var(--accent);}
+.escudo svg{width:100%;height:100%;}
+.escudo.on svg{fill:rgba(198,154,58,.16);}
+.escudo-txt{font-size:11px;color:var(--muted);margin-left:5px;}
+.streak-badge.tier-medio{border-color:rgba(198,154,58,.45);}
+.streak-badge.tier-alto{border-color:rgba(198,154,58,.7);box-shadow:0 0 16px rgba(198,154,58,.25);}
+@media(max-width:560px){
+  .streak-risco{padding:.9rem 1rem;gap:11px;flex-wrap:wrap;}
+  .risco-ico{width:36px;height:36px;}
+  .risco-cta{width:100%;justify-content:center;}
+}
+
 /* Faixa de revisões pendentes */
 .rev-hoje{
   display:flex;align-items:center;gap:14px;
@@ -197,6 +226,18 @@
     <div class="metric-card fade-up d4"><div class="metric-label">Total geral</div><div class="metric-val" id="m-total">0h 0m</div><div class="metric-sub">desde o início</div></div>
   </div>
 
+  <!-- Sequência em risco (só no fim do dia, quando ainda não estudou) -->
+  <div class="streak-risco" id="streak-risco" style="display:none;">
+    <div class="risco-ico">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.4 3.5a2 2 0 0 1 3.2 0l7.4 12.4A2 2 0 0 1 19.3 19H4.7a2 2 0 0 1-1.7-3.1z"/><path d="M12 17h.01"/></svg>
+    </div>
+    <div style="flex:1;min-width:0;">
+      <div class="risco-txt" id="risco-txt">—</div>
+      <div class="risco-sub" id="risco-sub">—</div>
+    </div>
+    <a class="risco-cta" href="cronometro.html">Estudar agora</a>
+  </div>
+
   <!-- Revisões de hoje (só aparece quando há algo a revisar) -->
   <a class="rev-hoje" id="rev-hoje" href="revisoes.html" style="display:none;">
     <div class="rev-hoje-ico">
@@ -280,6 +321,9 @@
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:6px;">Atual</div>
           <div class="streak-big" id="streak-big" style="font-family:var(--font-d);font-size:36px;font-weight:700;letter-spacing:-1px;">0</div>
           <div style="font-size:12px;color:var(--muted);">dias seguidos</div>
+          <div class="streak-recorde" id="streak-recorde"></div>
+          <div class="streak-marco" id="streak-marco"></div>
+          <div class="escudos-row" id="streak-escudos"></div>
         </div>
         <div style="border-top:1px solid var(--border);padding-top:14px;">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:10px;">Últimos 30 dias</div>
@@ -502,9 +546,10 @@ onAuthStateChanged(auth,async user=>{
   const pSnap2=await getDoc(doc(db,`users/${cu.uid}/data`,'profile'));
   if(pSnap2.exists()){const rh=pSnap2.data().reminderTime;if(rh){const[h,m]=rh.split(':').map(Number);reminderHour=h;reminderMin=m||0;}}
 
-  // Matérias e notas
+  // Matérias, notas e estado da sequência
   await loadSubjects();
   await loadNotes();
+  await carregarStreak();
   initColorPicker();
 
   // Sessões em TEMPO REAL com onSnapshot
@@ -632,6 +677,108 @@ function updateAll(){
   renderSubjects();
   renderPie();
   firstUpdate=false;
+}
+
+/* ═══ Sequência: escudos, recorde e aviso de risco ═══
+   Guardado em users/{uid}/data/streak:
+   { escudos, protegidos:[datas salvas por escudo], recorde, ultimoMarco } */
+const MAX_ESCUDOS=3, DIAS_POR_ESCUDO=7, MIN_SEQ_SEG=15*60;// 15 min salvam o dia
+let streakState={escudos:0,protegidos:[],recorde:0,ultimoMarco:0};
+let streakSalvando=false;
+
+async function carregarStreak(){
+  try{
+    const s=await getDoc(doc(db,`users/${cu.uid}/data`,'streak'));
+    if(s.exists()){const d=s.data();streakState={escudos:d.escudos||0,protegidos:d.protegidos||[],recorde:d.recorde||0,ultimoMarco:d.ultimoMarco||0};}
+  }catch(e){console.warn('[streak]',e);}
+}
+async function salvarStreak(){
+  if(streakSalvando)return;
+  streakSalvando=true;
+  try{await setDoc(doc(db,`users/${cu.uid}/data`,'streak'),streakState,{merge:true});}
+  catch(e){console.warn('[streak salvar]',e);}
+  finally{streakSalvando=false;}
+}
+/* Gasta escudos para cobrir os dias perdidos desde a última sessão.
+   Só gasta se os escudos cobrirem TODOS os dias do buraco — senão a sequência
+   quebraria do mesmo jeito e o escudo seria desperdiçado. */
+function aplicarEscudos(sd){
+  const protegidos=new Set(streakState.protegidos||[]);
+  const buraco=[];
+  for(let i=1;i<=MAX_ESCUDOS;i++){
+    const d=now();d.setDate(d.getDate()-i);
+    const s=localStr(d);
+    if(sd.has(s)||protegidos.has(s))break;// achou o último dia válido
+    buraco.push(s);
+  }
+  if(!buraco.length)return false;
+  // Precisa ter havido sequência antes do buraco
+  const antes=now();antes.setDate(antes.getDate()-(buraco.length+1));
+  const tinhaSequencia=sd.has(localStr(antes))||protegidos.has(localStr(antes));
+  if(!tinhaSequencia)return false;
+  if((streakState.escudos||0)<buraco.length)return false;// não cobre tudo
+  streakState.escudos-=buraco.length;
+  streakState.protegidos=[...protegidos,...buraco].slice(-30);// guarda os últimos 30
+  return true;
+}
+function atualizarSequencia(streak,segHoje){
+  // Escudos ganhos: 1 a cada 7 dias, até o teto
+  const marco=Math.floor(streak/DIAS_POR_ESCUDO);
+  let mudou=false;
+  if(marco>(streakState.ultimoMarco||0)){
+    const ganhos=Math.min(MAX_ESCUDOS-(streakState.escudos||0),marco-(streakState.ultimoMarco||0));
+    if(ganhos>0)streakState.escudos=(streakState.escudos||0)+ganhos;
+    streakState.ultimoMarco=marco;mudou=true;
+  }else if(marco<(streakState.ultimoMarco||0)){
+    streakState.ultimoMarco=marco;mudou=true;// sequência quebrou: reinicia a contagem
+  }
+  if(streak>(streakState.recorde||0)){streakState.recorde=streak;mudou=true;}
+  if(mudou)salvarStreak();
+
+  const rec=streakState.recorde||0, esc=streakState.escudos||0;
+  const badge=document.getElementById('streak-display');
+  if(badge){
+    badge.textContent=`${streak} dia${streak!==1?'s':''} seguido${streak!==1?'s':''}`;
+    badge.classList.toggle('tier-alto',streak>=30);
+    badge.classList.toggle('tier-medio',streak>=7&&streak<30);
+  }
+  const big=document.getElementById('streak-big');if(big)big.textContent=streak;
+
+  // Recorde
+  const recEl=document.getElementById('streak-recorde');
+  if(recEl)recEl.innerHTML=rec>0?(streak>=rec&&streak>0?'<b style="color:#C69A3A">seu melhor até hoje</b>':`recorde: <b>${rec}</b> dia${rec!==1?'s':''}`):'';
+
+  // Escudos
+  const escEl=document.getElementById('streak-escudos');
+  if(escEl){
+    escEl.innerHTML=Array.from({length:MAX_ESCUDOS},(_,i)=>
+      `<span class="escudo${i<esc?' on':''}" title="${i<esc?'Escudo disponível':'Escudo vazio'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>`).join('')
+      +`<span class="escudo-txt">${esc?`${esc} escudo${esc!==1?'s':''} — salva${esc!==1?'m':''} um dia perdido`:`próximo escudo em ${DIAS_POR_ESCUDO-(streak%DIAS_POR_ESCUDO)} dia${DIAS_POR_ESCUDO-(streak%DIAS_POR_ESCUDO)!==1?'s':''}`}</span>`;
+  }
+
+  // Próximo marco
+  const marcos=[7,14,30,60,100,180,365];
+  const prox=marcos.find(m=>m>streak);
+  const mEl=document.getElementById('streak-marco');
+  if(mEl)mEl.textContent=prox?`Faltam ${prox-streak} dia${prox-streak!==1?'s':''} para ${prox}`:'';
+
+  avisoDeRisco(streak,segHoje,esc);
+}
+/* Aviso de risco: aparece quando a sequência está viva, você ainda não bateu o
+   mínimo do dia, e o dia está acabando. */
+function avisoDeRisco(streak,segHoje,esc){
+  const el=document.getElementById('streak-risco');
+  if(!el)return;
+  const h=now().getHours();
+  const mostrar=streak>0&&segHoje<MIN_SEQ_SEG&&h>=17;
+  el.style.display=mostrar?'flex':'none';
+  if(!mostrar)return;
+  const faltam=24-h;
+  document.getElementById('risco-txt').innerHTML=
+    `Sua sequência de <b>${streak} dia${streak!==1?'s':''}</b> acaba em <b>${faltam}h</b>`;
+  document.getElementById('risco-sub').textContent=
+    segHoje>0?`Faltam ${Math.ceil((MIN_SEQ_SEG-segHoje)/60)} min de estudo para garantir o dia`
+             :(esc>0?`Você tem ${esc} escudo${esc!==1?'s':''} — mas melhor não gastar`:'Bastam 15 minutos para manter');
 }
 
 function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return`${h}h ${m}m`;}
@@ -893,13 +1040,14 @@ function computeMetrics(animate=false){
     const el_tot=document.getElementById('m-total');if(el_tot)el_tot.textContent=fmt(tot);
   }
   const el_sub=document.getElementById('m-today-sub');if(el_sub)el_sub.textContent=td>0?'estudado hoje':'nenhuma sessão hoje';
-  // Streak — start from today; if today has no session yet, allow yesterday as starting point (streak still alive)
+  // Sequência: conta dias com sessão e também os dias salvos por um escudo
+  if(aplicarEscudos(sd))salvarStreak();// gasta escudo(s) se houver buraco coberto
+  const protegidos=new Set(streakState.protegidos||[]);
   let streak=0;const ck=now();
-  if(!sd.has(localStr(ck)))ck.setDate(ck.getDate()-1);
-  while(true){const s2=localStr(ck);if(sd.has(s2)){streak++;ck.setDate(ck.getDate()-1);}else break;}
-  document.getElementById('streak-display').textContent=`${streak} dia${streak!==1?'s':''} seguido${streak!==1?'s':''}`;
-  document.getElementById('streak-big').textContent=streak;
-  window._sd=sd;
+  if(!sd.has(localStr(ck)))ck.setDate(ck.getDate()-1);// hoje ainda dá tempo de cumprir
+  while(true){const s2=localStr(ck);if(sd.has(s2)||protegidos.has(s2)){streak++;ck.setDate(ck.getDate()-1);}else break;}
+  window._sd=sd;window._streak=streak;
+  atualizarSequencia(streak,td);
   // Goal ring
   const C=2*Math.PI*42;
   const ring=document.getElementById('goal-ring');

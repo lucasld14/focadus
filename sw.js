@@ -1,4 +1,4 @@
-const CACHE = 'focadus-v44';
+const CACHE = 'focadus-v45';
 const ASSETS = [
   '/',
   '/dashboard.html',
