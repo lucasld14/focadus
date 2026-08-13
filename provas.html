@@ -50,6 +50,15 @@
 .insc-date-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 8px;font-size:12px;font-family:inherit;cursor:pointer;color-scheme:dark;}
 [data-theme="light"] .insc-date-input{color-scheme:light;}
 .insc-date-input:hover{border-color:var(--border-hover);}
+/* Seleção de matérias da prova */
+.mat-chips{display:flex;flex-wrap:wrap;gap:7px;max-height:150px;overflow-y:auto;padding:2px;}
+.mat-chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:20px;padding:7px 13px;font-size:12.5px;font-family:inherit;cursor:pointer;transition:all .15s;}
+.mat-chip:hover{border-color:var(--border-hover);color:var(--text);}
+.mat-chip.on{background:rgba(198,154,58,.14);border-color:rgba(198,154,58,.45);color:var(--text);}
+.mat-chip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.mat-chips-vazio{font-size:12.5px;color:var(--muted);font-style:italic;}
+.prova-mats{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.prova-mat{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);background:var(--surface2);border-radius:20px;padding:3px 10px;}
 
 @media(max-width:700px){
   .prova-num{font-size:38px;}
@@ -106,6 +115,8 @@
     <input class="modal-input" type="text" id="prova-nome" placeholder="Ex: ENEM, Vestibular, OAB...">
     <label class="modal-label">Data da prova</label>
     <input class="modal-input" type="date" id="prova-data">
+    <label class="modal-label">Matérias que caem nesta prova <span style="color:var(--muted);font-weight:400;">(usado para agendar suas revisões)</span></label>
+    <div class="mat-chips" id="prova-materias"></div>
     <label class="modal-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:16px;">
       <input type="checkbox" id="prova-inscricao-feita" onchange="toggleInscDataField()" style="width:16px;height:16px;accent-color:var(--green);cursor:pointer;">
       Já fiz a inscrição desta prova
@@ -156,7 +167,8 @@ import{getAuth,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.
 import{getFirestore,doc,getDoc,setDoc,collection,query,where,getDocs}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept.firebaseapp.com",projectId:"brainzept",storageBucket:"brainzept.firebasestorage.app",messagingSenderId:"187802304063",appId:"1:187802304063:web:00f06e412f1bfa89e7828a"};
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
-let cu,provas=[];
+let cu,provas=[],subjects=[];
+let matsSelecionadas=[];// matérias marcadas no modal aberto
 let _midnightTimer=null;
 
 const th=localStorage.getItem('bz-theme')||'dark';
@@ -226,13 +238,18 @@ onAuthStateChanged(auth,async user=>{
   const name=pData.name||user.displayName||user.email.split('@')[0];
   window._profilePhoto=pData.photo||null;
   setAvatar(name,window._profilePhoto);
+  try{
+    const sSnap=await getDoc(doc(db,`users/${cu.uid}/data`,'subjects'));
+    subjects=sSnap.exists()?sSnap.data().list||[]:[];
+  }catch(e){subjects=[];}
   const prvSnap=await getDoc(doc(db,`users/${cu.uid}/data`,'provas'));
-  provas=prvSnap.exists()?prvSnap.data().list||[]:[]; 
+  provas=prvSnap.exists()?prvSnap.data().list||[]:[];
   renderProvas();
 });
 
 function setAvatar(name,photo){const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);const av=document.getElementById('avatar-el');if(photo)av.innerHTML=`<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;else av.textContent=initials;document.getElementById('user-name-el').textContent=name;}
 
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function getStatus(diff){
   if(diff<0)return{label:'Concluída ✓',cls:'concluida status-concluida',cardCls:'concluida'};
   if(diff===0)return{label:'É hoje!',cls:'urgente status-urgente',cardCls:'urgente'};
@@ -268,9 +285,10 @@ function renderProvas(){
     return`<div class="prova-card ${st.cardCls}">
       <div class="prova-header">
         <div style="flex:1;">
-          <div class="prova-nome">${p.nome}</div>
+          <div class="prova-nome">${esc(p.nome)}</div>
           <div class="prova-data">${dataProva.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
           <span class="status-badge ${st.cls}">${st.label}</span>
+          ${(p.materias&&p.materias.length)?`<div class="prova-mats">${p.materias.map(mid=>{const s=subjects.find(y=>y.id===mid);return s?`<span class="prova-mat"><span class="mat-chip-dot" style="background:${esc(s.color||'#C69A3A')}"></span>${esc(s.name)}</span>`:'';}).join('')}</div>`:''}
           ${inscHtml}
         </div>
         <div style="display:flex;align-items:flex-start;gap:8px;">
@@ -287,8 +305,20 @@ function renderProvas(){
   _midnightTimer=setTimeout(renderProvas,prox-Date.now());
 }
 
-window.openProvaModal=()=>{document.getElementById('prova-data').min=new Date().toISOString().slice(0,10);document.getElementById('prova-inscricao-feita').checked=false;document.getElementById('prova-inscricao-data').value='';document.getElementById('insc-data-wrap').style.display='';document.getElementById('modal-prova').classList.add('open');setTimeout(()=>document.getElementById('prova-nome').focus(),100);};
-window.closeProvaModal=()=>{document.getElementById('modal-prova').classList.remove('open');document.getElementById('prova-nome').value='';document.getElementById('prova-data').value='';document.getElementById('prova-inscricao-feita').checked=false;document.getElementById('prova-inscricao-data').value='';document.getElementById('insc-data-wrap').style.display='';};
+function renderMatChips(){
+  const el=document.getElementById('prova-materias');
+  if(!subjects.length){el.innerHTML='<span class="mat-chips-vazio">Nenhuma matéria cadastrada ainda — crie no Dashboard.</span>';return;}
+  el.innerHTML=subjects.map((s,i)=>`<button type="button" class="mat-chip${matsSelecionadas.includes(s.id)?' on':''}" onclick="toggleMatProva(${i},this)"><span class="mat-chip-dot" style="background:${esc(s.color||'#C69A3A')}"></span>${esc(s.name)}</button>`).join('');
+}
+window.toggleMatProva=(i,btn)=>{
+  const id=subjects[i]&&subjects[i].id;
+  if(!id)return;
+  const k=matsSelecionadas.indexOf(id);
+  if(k>=0)matsSelecionadas.splice(k,1);else matsSelecionadas.push(id);
+  btn.classList.toggle('on',k<0);
+};
+window.openProvaModal=()=>{document.getElementById('prova-data').min=new Date().toISOString().slice(0,10);document.getElementById('prova-inscricao-feita').checked=false;document.getElementById('prova-inscricao-data').value='';document.getElementById('insc-data-wrap').style.display='';matsSelecionadas=[];renderMatChips();document.getElementById('modal-prova').classList.add('open');setTimeout(()=>document.getElementById('prova-nome').focus(),100);};
+window.closeProvaModal=()=>{document.getElementById('modal-prova').classList.remove('open');document.getElementById('prova-nome').value='';document.getElementById('prova-data').value='';document.getElementById('prova-inscricao-feita').checked=false;document.getElementById('prova-inscricao-data').value='';document.getElementById('insc-data-wrap').style.display='';matsSelecionadas=[];};
 window.toggleInscDataField=()=>{const done=document.getElementById('prova-inscricao-feita').checked;document.getElementById('insc-data-wrap').style.display=done?'none':'';};
 window.addProva=async()=>{
   const nome=document.getElementById('prova-nome').value.trim();
@@ -298,7 +328,7 @@ window.addProva=async()=>{
   if(new Date(data+'T00:00:00')<hoje){bzAlert('Data inválida','A data da prova precisa ser hoje ou no futuro.','warn');return;}
   const inscFeita=document.getElementById('prova-inscricao-feita').checked;
   const inscData=document.getElementById('prova-inscricao-data').value||null;
-  const nova={id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)),nome,data,inscricaoFeita:inscFeita,inscricaoData:inscFeita?null:inscData,criadaEm:Date.now()};
+  const nova={id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)),nome,data,materias:[...matsSelecionadas],inscricaoFeita:inscFeita,inscricaoData:inscFeita?null:inscData,criadaEm:Date.now()};
   try{
     await setDoc(doc(db,`users/${cu.uid}/data`,'provas'),{list:[...provas,nova]});
     provas.push(nova);

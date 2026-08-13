@@ -37,6 +37,7 @@
 .due-pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
 .due-atrasada{background:rgba(226,75,74,.12);color:var(--red);}
 .due-hoje{background:rgba(239,159,39,.14);color:var(--amber);}
+.due-pill.travado{background:rgba(226,75,74,.14);color:var(--red);}
 
 /* Entrada em cascata dos cards */
 @keyframes revUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
@@ -282,7 +283,9 @@ const FC={apiKey:"AIzaSyCy5sqb9OTa9AL6X3RfbFsnMXx90hiqpPs",authDomain:"brainzept
 const app=initializeApp(FC);initializeAppCheck(app,{provider:new ReCaptchaV3Provider('6Ldx9zwtAAAAAHo-bQtNHqh9pxGZGetqUcEGHqHD'),isTokenAutoRefreshEnabled:true});const auth=getAuth(app),db=getFirestore(app);
 let cu,subjects=[],conteudos=[];
 let cronoDias={};// {subjectId: [0..6]} — dias da semana em que a matéria aparece no cronograma (0=Seg)
+let cronoCarga={};// {0..6: minutos planejados naquele dia}
 let horasPorMateria={};// {subjectId: segundos estudados}
+let provas=[];// [{data, materias:[subjectId]}] — usado para nunca agendar depois da prova
 let editingId=null,detalheId=null,revisandoId=null;
 let materiaFiltro=null;// null = nenhuma matéria aberta
 let viewTodos=false;// false = grade de cards por matéria · true = lista de todos
@@ -300,10 +303,64 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 
 /* ───── MOTOR DE REVISÃO (SM-2 adaptado, conservador) ───── */
 const EASE_MIN=1.3,EASE_MAX=2.3,EASE_DEFAULT=1.7,MAX_INTERVALO=180;
+
+/* ① Tempo REAL decorrido desde a última revisão.
+   Se você revisou 40 dias depois e ainda lembrou, provou reter por 40 dias —
+   o próximo intervalo tem que partir daí, não do que estava agendado. */
+function diasDecorridos(item){
+  const h=item.history||[];
+  const ultima=h.length?h[h.length-1].date:item.studiedAt;
+  if(!ultima)return item.interval||1;
+  const d=diffDays(todayStr(),ultima);
+  return isFinite(d)?Math.max(0,d):(item.interval||1);
+}
+/* ⑤ Aprende o seu padrão: se você costuma achar fácil, todos os intervalos
+   crescem um pouco mais rápido; se costuma penar, crescem mais devagar. */
+function fatorGlobal(){
+  let n=0,soma=0;
+  conteudos.forEach(c=>(c.history||[]).slice(-5).forEach(h=>{soma+=(typeof h.q==='number'?h.q:2);n++;}));
+  if(n<10)return 1;// ainda sem histórico suficiente para concluir algo
+  const media=soma/n;// 2 = "Bom" = neutro
+  return 1+Math.max(-0.15,Math.min(0.20,(media-2)*0.20));
+}
+/* ⑥ Conteúdo travado: errado várias vezes seguidas não precisa de revisão,
+   precisa ser reestudado do zero. */
+function falhasSeguidas(item){
+  const h=item.history||[];
+  let n=0;
+  for(let i=h.length-1;i>=0;i--){if(h[i].q===0)n++;else break;}
+  return n;
+}
+function estaTravado(item){return falhasSeguidas(item)>=3;}
+/* ② Próxima prova que inclui esta matéria (para não agendar depois dela) */
+function provaLimite(materia){
+  const sid=subjectIdDe(materia);
+  if(!sid)return null;
+  const t=todayStr();
+  const rel=provas
+    .filter(p=>p&&p.data&&p.data>t&&Array.isArray(p.materias)&&p.materias.includes(sid))
+    .sort((a,b)=>a.data<b.data?-1:1);
+  return rel.length?{data:rel[0].data,nome:rel[0].nome||'prova'}:null;
+}
+/* ③ Quantas revisões já caem em cada data (para espalhar a carga) */
+function cargaPorData(idIgnorar){
+  const m={};
+  conteudos.forEach(c=>{if(c.nextReview&&c.id!==idIgnorar)m[c.nextReview]=(m[c.nextReview]||0)+1;});
+  return m;
+}
+
 // q: 0 muito difícil · 1 difícil · 2 bom · 3 muito fácil
-function computeReview(item,q){
+function computeReview(item,q,decorrido){
   let ease=(typeof item.ease==='number')?item.ease:EASE_DEFAULT;
-  let interval=(typeof item.interval==='number')?item.interval:1;
+  const agendado=(typeof item.interval==='number')?item.interval:1;
+  // ① base = o que você realmente demonstrou reter, limitado a 3x o agendado
+  // para um atraso enorme não explodir o intervalo de uma vez.
+  // Limites: no mínimo metade do agendado (revisar bem antes da hora prova menos,
+  // mas não pode zerar um intervalo longo) e no máximo o triplo.
+  const real=(typeof decorrido==='number')?decorrido:agendado;
+  let interval=(q===0)
+    ? Math.max(1,Math.min(agendado,real||agendado))
+    : Math.max(1,Math.min(Math.max(real,agendado*0.5),agendado*3));
   let reps=item.reps||0;
   ease=Math.max(EASE_MIN,Math.min(EASE_MAX,ease+[-0.30,-0.15,0.05,0.15][q]));
   let ni;
@@ -352,25 +409,41 @@ function dayIdxDe(dstr){const d=new Date(dstr+'T00:00:00').getDay();return d===0
 const DIA_NOME=['segunda','terça','quarta','quinta','sexta','sábado','domingo'];
 /* Calcula a próxima revisão já calibrada e encaixada no cronograma */
 function proximaRevisao(item,q){
-  const base=computeReview(item,q).interval;// base "limpa": é ela que alimenta o próximo cálculo
-  const f=fatorImportancia(item.importancia)*fatorCarga(item.materia)*fatorDedicacao(item.materia);
-  let dias=Math.max(1,Math.min(MAX_INTERVALO,Math.round(base*f)));
-  let encaixe=null;
-  const cron=diasCronogramaDe(item.materia);
-  if(cron){
-    const tol=Math.max(1,Math.round(dias*TOLERANCIA_ENCAIXE));
-    let melhor=null;
-    for(let d=1;d<=tol;d++){// procura do mais perto para o mais longe
-      for(const cand of [dias-d,dias+d]){
-        if(cand<1||cand>365||melhor!==null)continue;
-        if(cron.includes(dayIdxDe(addDays(todayStr(),cand))))melhor=cand;
-      }
-      if(melhor!==null)break;
+  const decorrido=diasDecorridos(item);
+  const base=computeReview(item,q,decorrido).interval;// base "limpa": alimenta o próximo cálculo
+  const f=fatorImportancia(item.importancia)*fatorCarga(item.materia)*fatorDedicacao(item.materia)*fatorGlobal();
+  let alvo=Math.max(1,Math.min(MAX_INTERVALO,Math.round(base*f)));
+
+  // ② Prova: aperta o passo na reta final e nunca agenda para depois dela
+  const prova=provaLimite(item.materia);
+  let motivoProva=null;
+  if(prova){
+    const ate=diffDays(prova.data,todayStr());
+    if(ate>0){
+      if(ate<=14&&alvo>2){alvo=Math.max(2,Math.round(alvo*0.6));motivoProva='reta final';}
+      if(alvo>=ate){alvo=Math.max(1,ate-1);motivoProva='antes da prova';}
     }
-    if(cron.includes(dayIdxDe(addDays(todayStr(),dias)))){encaixe=dayIdxDe(addDays(todayStr(),dias));}
-    else if(melhor!==null){dias=melhor;encaixe=dayIdxDe(addDays(todayStr(),dias));}
   }
-  return{dias,base,data:addDays(todayStr(),dias),encaixe};
+
+  // ③ Dentro da margem de 20%, escolhe o melhor dia: prioriza o cronograma,
+  // depois o dia com menos revisões e menos horas já planejadas.
+  const tol=Math.max(1,Math.round(alvo*TOLERANCIA_ENCAIXE));
+  const cron=diasCronogramaDe(item.materia);
+  const carga=cargaPorData(item.id);
+  let melhor=alvo,nota=-Infinity;
+  for(let d=Math.max(1,alvo-tol);d<=Math.min(MAX_INTERVALO,alvo+tol);d++){
+    const data=addDays(todayStr(),d);
+    if(prova&&data>=prova.data)continue;// não passa da prova
+    let s=-Math.abs(d-alvo)*2.5;
+    if(cron&&cron.includes(dayIdxDe(data)))s+=14;
+    s-=(carga[data]||0)*3.5;
+    s-=((cronoCarga[dayIdxDe(data)]||0)/60)*0.9;
+    if(s>nota){nota=s;melhor=d;}
+  }
+  const dias=Math.max(1,melhor);
+  const data=addDays(todayStr(),dias);
+  const encaixe=(cron&&cron.includes(dayIdxDe(data)))?dayIdxDe(data):null;
+  return{dias,base,data,encaixe,motivoProva,prova:prova?prova.nome:null};
 }
 function memoryLevel(item){
   const reps=item.reps||0;
@@ -441,18 +514,24 @@ onAuthStateChanged(auth,async user=>{
 async function loadContexto(){
   try{
     const snap=await getDoc(doc(db,`users/${cu.uid}/cronograma`,'template'));
-    cronoDias={};
+    cronoDias={};cronoCarga={};
     if(snap.exists()){
       const days=snap.data().days||{};
       for(let i=0;i<7;i++){
+        cronoCarga[i]=0;
         (days[String(i)]||[]).forEach(bl=>{
           if(!bl||!bl.subjectId)return;
           (cronoDias[bl.subjectId]=cronoDias[bl.subjectId]||[]).push(i);
+          cronoCarga[i]+=bl.mins||0;
         });
       }
       Object.keys(cronoDias).forEach(k=>{cronoDias[k]=[...new Set(cronoDias[k])].sort();});
     }
-  }catch(e){console.warn('[cronograma]',e);cronoDias={};}
+  }catch(e){console.warn('[cronograma]',e);cronoDias={};cronoCarga={};}
+  try{
+    const snap=await getDoc(doc(db,`users/${cu.uid}/data`,'provas'));
+    provas=snap.exists()?(snap.data().list||[]):[];
+  }catch(e){console.warn('[provas]',e);provas=[];}
   try{
     const snap=await getDocs(collection(db,`users/${cu.uid}/sessions`));
     horasPorMateria={};
@@ -490,13 +569,22 @@ function render(){
   renderHoje();
   renderTodos();
 }
-/* Prioridade: atrasadas primeiro, depois vencendo antes, e em empate a importância maior.
-   É o que faz "os mais necessários" ficarem no topo. */
+/* ④ Prioridade por RISCO, não só por data: o que está mais prestes a ser
+   esquecido vem primeiro. Pesa atraso, memória, importância e prova próxima. */
 function prioridade(c){
   const t=todayStr();
   const nr=c.nextReview||t;
   const atraso=diffDays(t,nr);// >0 = atrasada há X dias
-  return -(atraso*10+(c.importancia||1));
+  let risco=atraso*10;
+  risco+=(100-memoryLevel(c))*0.35;      // memória fraca sobe na fila
+  risco+=(c.importancia||3)*4;           // mais estrelas, mais prioridade
+  if(estaTravado(c))risco+=25;           // conteúdo travado precisa de atenção
+  const prova=provaLimite(c.materia);
+  if(prova){
+    const ate=diffDays(prova.data,t);
+    if(ate>=0&&ate<=30)risco+=(30-ate);  // quanto mais perto a prova, mais urgente
+  }
+  return -risco;// menor primeiro = maior risco primeiro
 }
 function sortPrioridade(list){return [...list].sort((a,b)=>prioridade(a)-prioridade(b));}
 function visiveis(){return materiaFiltro?conteudos.filter(c=>(c.materia||'Sem matéria')===materiaFiltro):conteudos;}
@@ -625,7 +713,7 @@ function cardHtml(c,showDue){
     <div class="cont-top">
       <div style="min-width:0;">
         <div class="cont-nome">${esc(c.titulo)}</div>
-        <div class="cont-meta">${matLabel}<span style="color:#F5C462;">${'★'.repeat(c.importancia||1)}</span>${duePill}${nextInfo?`<span>${nextInfo}</span>`:''}</div>
+        <div class="cont-meta">${matLabel}<span style="color:#F5C462;">${'★'.repeat(c.importancia||1)}</span>${duePill}${estaTravado(c)?'<span class="due-pill travado">reestudar</span>':''}${nextInfo?`<span>${nextInfo}</span>`:''}</div>
       </div>
       <span class="cont-status" style="background:${st.color}1f;color:${st.color};"><span class="mem-dot" style="background:${st.color};"></span>${st.label}</span>
     </div>
@@ -773,15 +861,25 @@ window.revealConteudo=()=>{
   }
   const cron=diasCronogramaDe(c.materia);
   const partes=[];
-  partes.push('O intervalo se ajusta pela sua resposta, pela importância do conteúdo, pela quantidade de conteúdos da matéria e pelo quanto você estuda ela.');
-  if(cron)partes.push(`Como <b>${esc(c.materia)}</b> está no seu cronograma (${cron.map(d=>DIA_NOME[d]).join(', ')}), a data é encaixada nesses dias sempre que possível.`);
+  const dec=diasDecorridos(c);
+  const agendado=c.interval||1;
+  if(dec>agendado+1)partes.push(`Você está revisando <b>${dec-agendado} dia${dec-agendado===1?'':'s'} depois</b> do previsto — se lembrar, o próximo intervalo já parte desse tempo maior.`);
+  partes.push('O intervalo considera sua resposta, a importância, a carga da matéria, quanto você a estuda e o seu histórico geral.');
+  const prova=provaLimite(c.materia);
+  if(prova){
+    const ate=diffDays(prova.data,todayStr());
+    partes.push(`Como <b>${esc(prova.nome)}</b> é em ${ate} dia${ate===1?'':'s'}, nenhuma revisão é marcada para depois dela${ate<=14?' e os intervalos ficam mais curtos na reta final':''}.`);
+  }
+  if(cron)partes.push(`<b>${esc(c.materia)}</b> está no cronograma (${cron.map(d=>DIA_NOME[d]).join(', ')}), então a data cai nesses dias sempre que possível, preferindo os menos cheios.`);
+  if(estaTravado(c))partes.push(`<b style="color:var(--red)">Você errou ${falhasSeguidas(c)} vezes seguidas.</b> Talvez este conteúdo precise ser reestudado do zero, não só revisado.`);
   document.getElementById('rev-explica').innerHTML=partes.join(' ');
 };
 /* interval = base "limpa" que alimenta o próximo cálculo (sem os fatores de calibração,
    senão eles se multiplicariam a cada revisão). dias = data realmente agendada. */
-async function persistReview(c,interval,dias,q,encaixe){
-  const ease=q!=null?computeReview(c,q).ease:c.ease;
-  const reps=q!=null?computeReview(c,q).reps:(c.reps||0);
+async function persistReview(c,interval,dias,q,encaixe,motivoProva,nomeProva){
+  const dec=diasDecorridos(c);
+  const ease=q!=null?computeReview(c,q,dec).ease:c.ease;
+  const reps=q!=null?computeReview(c,q,dec).reps:(c.reps||0);
   const nextReview=addDays(todayStr(),dias);
   const history=(c.history||[]).concat([{date:todayStr(),q:q==null?2:q,intervalAfter:dias}]);
   const patch={ease,reps,interval,nextReview,history};
@@ -790,14 +888,16 @@ async function persistReview(c,interval,dias,q,encaixe){
   try{
     await updateDoc(doc(db,`users/${cu.uid}/revisoes`,c.id),patch);
     closeRevisao();render();
-    const extra=(encaixe!=null)?` · encaixado na ${DIA_NOME[encaixe]} de ${c.materia}`:'';
+    let extra=(encaixe!=null)?` · ${DIA_NOME[encaixe]} de ${c.materia}`:'';
+    if(motivoProva==='antes da prova')extra+=` · antes de ${nomeProva}`;
+    else if(motivoProva==='reta final')extra+=` · reta final de ${nomeProva}`;
     showToastMsg(`Próxima revisão em ${dias} dia${dias===1?'':'s'} · ${fmtBr(nextReview)}${extra}`);
   }catch(e){Object.assign(c,backup);bzAlert('Erro ao salvar revisão',(e.code||e.message||'desconhecido'),'danger');}
 }
 window.applyReview=(q)=>{
   const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
   const p=proximaRevisao(c,q);
-  persistReview(c,p.base,p.dias,q,p.encaixe);
+  persistReview(c,p.base,p.dias,q,p.encaixe,p.motivoProva,p.prova);
 };
 window.applyManual=()=>{
   const c=conteudos.find(x=>x.id===revisandoId);if(!c)return;
