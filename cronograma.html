@@ -300,7 +300,11 @@ let checksData={};// {"AAAA-MM-DD_<idDoBloco>": true} — o que já foi estudado
 let primeiraCarga=true;
 let semanaPersonalizada=false;// true = esta semana tem um plano proprio, diferente do padrao
 
+/* DIAS é indexado pelo índice GUARDADO no banco (0=Seg … 6=Dom) — esse formato
+   não muda, para não deslocar os cronogramas já salvos.
+   ORDEM diz em que posição cada dia aparece na tela: a semana começa no domingo. */
 const DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+const ORDEM=[6,0,1,2,3,4,5];// posição na tela -> índice guardado
 let activeFormEl=null;
 let formState={}; // {dayIdx: {subjectId, hrs}}
 
@@ -312,8 +316,9 @@ function fmtH(secs){if(!secs)return'0h';const h=Math.floor(secs/3600),m=Math.flo
 function fmtHm(mins){if(!mins||isNaN(mins))return'—';const h=Math.floor(mins/60),m=mins%60;return m?`${h}h${String(m).padStart(2,'0')}`:`${h}h`;}
 function uid4(){return Math.random().toString(36).slice(2,7);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function getWeekStart(off){const t=new Date();t.setHours(0,0,0,0);const dow=t.getDay(),diff=dow===0?-6:1-dow;const mon=new Date(t);mon.setDate(t.getDate()+diff+off*7);return mon;}
-function getWeekDays(off){const mon=getWeekStart(off);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});}
+/* A semana exibida começa no domingo */
+function getWeekStart(off){const t=new Date();t.setHours(0,0,0,0);const dom=new Date(t);dom.setDate(t.getDate()-t.getDay()+off*7);return dom;}
+function getWeekDays(off){const dom=getWeekStart(off);return Array.from({length:7},(_,i)=>{const d=new Date(dom);d.setDate(dom.getDate()+i);return d;});}
 function weekKey(off){return localStr(getWeekStart(off));}
 function isToday(d){return localStr(d)===localStr(new Date());}
 
@@ -496,7 +501,7 @@ function renderDayDots(){
   const board=document.getElementById('board');
   if(!dots||!board)return;
   if(!ehCarrossel()){dots.innerHTML='';return;}
-  dots.innerHTML=DIAS.map((nome,i)=>`<button class="day-dot" aria-label="Ir para ${nome}" onclick="irParaDia(${i})"></button>`).join('');
+  dots.innerHTML=ORDEM.map((idx,pos)=>`<button class="day-dot" aria-label="Ir para ${DIAS[idx]}" onclick="irParaDia(${pos})"></button>`).join('');
   marcarDiaAtivo();
 }
 function diaVisivel(){
@@ -521,11 +526,10 @@ window.irParaDia=function(i){
 };
 function irParaHoje(){
   if(!ehCarrossel())return;
-  const hoje=new Date();
-  const dow=hoje.getDay();
-  const idx=dow===0?6:dow-1;// 0=Seg
+  // A semana começa no domingo, então getDay() (0=Dom) já é a posição na tela
+  const pos=new Date().getDay();
   const board=document.getElementById('board');
-  const col=board&&board.querySelectorAll('.day-col')[idx];
+  const col=board&&board.querySelectorAll('.day-col')[pos];
   if(!col)return;
   board.scrollLeft=col.offsetLeft-board.offsetLeft;// sem animação na abertura
   marcarDiaAtivo();
@@ -557,9 +561,9 @@ window.abrirMover=function(dayIdx,blockIdx,e){
     `<button class="move-opt"${blockIdx===0?' disabled':''} onclick="moverOrdem(${dayIdx},${blockIdx},-1)">Subir</button>`+
     `<button class="move-opt"${blockIdx>=total-1?' disabled':''} onclick="moverOrdem(${dayIdx},${blockIdx},1)">Descer</button>`+
     `<div class="move-pop-tit">Mover para</div>`+
-    DIAS.map((nome,d)=>d===dayIdx
-      ?`<button class="move-opt atual" disabled>${nome} (aqui)</button>`
-      :`<button class="move-opt" onclick="moverBloco(${dayIdx},${blockIdx},${d})">${nome}</button>`).join('');
+    ORDEM.map(d=>d===dayIdx
+      ?`<button class="move-opt atual" disabled>${DIAS[d]} (aqui)</button>`
+      :`<button class="move-opt" onclick="moverBloco(${dayIdx},${blockIdx},${d})">${DIAS[d]}</button>`).join('');
   document.body.appendChild(pop);// no body: nenhum container pode cortá-lo
   const r=e.currentTarget.getBoundingClientRect();
   const alt=pop.offsetHeight||280,larg=170;
@@ -652,8 +656,9 @@ function renderBoard(){
   board.innerHTML='';
   let totalMins=0,totalActSecs=0;
 
-  for(let i=0;i<7;i++){
-    const d=wdays[i];
+  for(let pos=0;pos<7;pos++){
+    const i=ORDEM[pos];// índice guardado do dia que aparece nesta posição
+    const d=wdays[pos];
     const tod=isToday(d);
     const blocks=daysData[i]||[];
     const dayMins=blocks.reduce((a,b)=>a+(b.mins||0),0);
