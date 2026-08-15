@@ -887,10 +887,9 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 
 window.openProfileModal=()=>{const name=document.getElementById('user-name-el').textContent;document.getElementById('profile-name-inp').value=name;const big=document.getElementById('profile-avatar-big');const initials=name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);big.innerHTML=window._profilePhoto?`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`:`<span style="font-size:28px;font-weight:700;">${initials}</span>`;document.getElementById('modal-profile').classList.add('open');};
 window.closeProfileModal=()=>document.getElementById('modal-profile').classList.remove('open');
-let _deferredPrompt=null;
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_deferredPrompt=e;const b=document.getElementById('install-btn');if(b)b.style.display='flex';});
-window.addEventListener('appinstalled',()=>{const b=document.getElementById('install-btn');if(b)b.style.display='none';_deferredPrompt=null;});
-window.installPWA=async()=>{if(!_deferredPrompt)return;_deferredPrompt.prompt();const{outcome}=await _deferredPrompt.userChoice;if(outcome==='accepted')_deferredPrompt=null;};
+/* Sem código de instalação aqui: esta é a única página sem barra superior
+   (tela cheia, sem distração), então o botão "Instalar app" nunca existiu nela.
+   A instalação continua disponível em todas as outras páginas. */
 window.handlePhoto=(input)=>{const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');const max=200;const r=Math.min(max/img.width,max/img.height,1);canvas.width=Math.round(img.width*r);canvas.height=Math.round(img.height*r);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);window._profilePhoto=canvas.toDataURL('image/jpeg',.75);document.getElementById('profile-avatar-big').innerHTML=`<img src="${window._profilePhoto}" style="width:100%;height:100%;object-fit:cover;">`;setAvatar(document.getElementById('user-name-el').textContent,window._profilePhoto);};img.src=e.target.result;};reader.readAsDataURL(file);};
 window.saveProfile=async()=>{const name=document.getElementById('profile-name-inp').value.trim();if(!name)return;try{await setDoc(doc(db,`users/${cu.uid}/data`,'profile'),{name,photo:window._profilePhoto||null});setAvatar(name,window._profilePhoto);}catch(e){console.error('saveProfile',e);showToast('Erro ao salvar perfil: '+(e.code||e.message||'desconhecido'));return;}closeProfileModal();};
 
