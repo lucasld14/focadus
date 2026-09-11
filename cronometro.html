@@ -58,6 +58,12 @@
 .ring-fill-layer{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .5s ease;}
 .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;}
 .timer-time{font-size:clamp(26px,8.5vw,40px);font-weight:600;letter-spacing:2px;font-variant-numeric:tabular-nums;line-height:1;text-align:center;font-family:'JetBrains Mono',monospace;}
+.timer-time.regressivo{color:#C69A3A;}
+.timer-time.batida{color:#1D9E75;}
+/* Alternador sessão / falta hoje */
+.modo-tempo{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:var(--muted);border-radius:20px;padding:4px 11px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;font-family:inherit;margin-bottom:9px;transition:all .18s;}
+.modo-tempo:hover{border-color:rgba(198,154,58,.45);color:#C69A3A;}
+.modo-tempo svg{opacity:.65;}
 .timer-sub{font-size:12px;color:var(--muted);margin-top:8px;letter-spacing:.06em;}
 
 /* ── Controls ── */
@@ -241,6 +247,10 @@
         <circle class="ring-fill" id="ring" cx="140" cy="140" r="126"/>
       </svg>
       <div class="ring-center">
+        <button class="modo-tempo" id="modo-tempo" onclick="alternarModoTempo()" title="Alternar entre o tempo da sessão e quanto falta para a meta de hoje">
+          <span id="modo-tempo-txt">Sessão</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 6h18"/><path d="M7 22l-4-4 4-4"/><path d="M21 18H3"/></svg>
+        </button>
         <div class="timer-time" id="timer-time">00:00:00</div>
         <div class="timer-sub" id="timer-sub">Pronto para estudar</div>
       </div>
@@ -314,6 +324,28 @@ let cu,subjects=[],baseElapsed=0,running=false,ivl=null,startTime=null;
 let seededExistingSessionId=null;// id da sessão que está sendo CONTINUADA (clicou pra retomar); persistido no timerState p/ sobreviver a recarregamentos
 let pomMode=false,pomPhase='work',pomLeft=0,pomTotal=0,pomCyclesDone=0,pomAutoTimer=null;
 let dailyMeta=4*3600;// meta diária em segundos (default 4h; loadToday sobrescreve com o valor real)
+let modoRegressivo=localStorage.getItem('bz-modo-tempo')==='regressivo';
+
+/* Total estudado HOJE somando todas as matérias, já incluindo o que está correndo agora.
+   Se a sessão atual é a continuação de uma já salva, desconta a parte dela que já está
+   em _todaySessions — senão esse tempo entraria duas vezes. */
+function totalHojeSecs(){
+  const sessoes=window._todaySessions||[];
+  const salvo=sessoes.reduce((a,s)=>a+(s.duration||0),0);
+  const retomada=seededExistingSessionId?sessoes.find(s=>s.id===seededExistingSessionId):null;
+  const novo=Math.max(0,getElapsed()-(retomada?(retomada.duration||0):0));
+  return salvo+novo;
+}
+function hms(secs){
+  const t=Math.max(0,Math.round(secs));
+  const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;
+  return`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+window.alternarModoTempo=()=>{
+  modoRegressivo=!modoRegressivo;
+  localStorage.setItem('bz-modo-tempo',modoRegressivo?'regressivo':'sessao');
+  updateDisplay();
+};
 const C=2*Math.PI*126;
 
 // ── Pomodoro helpers ──────────────────────────────────────────────────────
@@ -408,6 +440,8 @@ window.setMode=function(mode){
   document.getElementById('btn-mode-livre').classList.toggle('active',!pomMode);
   document.getElementById('btn-mode-pom').classList.toggle('active',pomMode);
   document.getElementById('pom-config').style.display=pomMode?'flex':'none';
+  const mt=document.getElementById('modo-tempo');
+  if(mt)mt.style.display=pomMode?'none':'';// só faz sentido no modo Livre
   document.getElementById('pom-dots').style.display=pomMode?'flex':'none';
   resetTimer();
   if(pomMode)renderPomDots();
@@ -696,15 +730,22 @@ function updateDisplay(){
   }else{
     ring.style.opacity='0';// esconde o anel base dourado no modo Livre (as camadas coloridas fazem o progresso; evita a bolinha residual da ponta arredondada)
     const e=getElapsed();
-    const h=Math.floor(e/3600),m=Math.floor((e%3600)/60),s=e%60;
-    const ts=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    document.getElementById('timer-time').textContent=ts;
-    document.getElementById('focus-time').textContent=ts;
-
-    // ─ Nova lógica: progressão baseada na META DIÁRIA ─
     const todaySessions=window._todaySessions||[];
-    const totalTodaySecs=todaySessions.reduce((sum,s)=>sum+(s.duration||0),0);
-    const progressPct=dailyMeta>0?Math.min(totalTodaySecs/dailyMeta,2):0;// permite até 200% (extra)
+    const totalHoje=totalHojeSecs();// todas as matérias + o que está correndo agora
+    const falta=dailyMeta-totalHoje;
+
+    // Número grande: tempo da sessão OU quanto falta para a meta do dia
+    const tt=document.getElementById('timer-time');
+    const ts=modoRegressivo?hms(Math.abs(falta)):hms(e);
+    tt.textContent=(modoRegressivo&&falta<0?'+':'')+ts;
+    tt.classList.toggle('regressivo',modoRegressivo&&falta>0);
+    tt.classList.toggle('batida',modoRegressivo&&falta<=0);
+    document.getElementById('focus-time').textContent=tt.textContent;
+    const mt=document.getElementById('modo-tempo-txt');
+    if(mt)mt.textContent=modoRegressivo?(falta>0?'Falta hoje':'Além da meta'):'Sessão';
+
+    // ─ Progressão baseada na META DIÁRIA (já conta o tempo em andamento) ─
+    const progressPct=dailyMeta>0?Math.min(totalHoje/dailyMeta,2):0;// permite até 200% (extra)
 
     // Renderiza a barra com cores por matéria
     renderProgressRing(progressPct,todaySessions);
@@ -732,6 +773,17 @@ function renderProgressRing(progressPct,todaySessions){
     if(!bySubject[subId])bySubject[subId]={duration:0,subject:null};
     bySubject[subId].duration+=s.duration||0;
   });
+  // Soma o tempo que está correndo agora na matéria selecionada, para o anel
+  // acompanhar o cronômetro em vez de só se mexer quando a sessão é salva.
+  const sidAtual=document.getElementById('subject-select').value;
+  if(sidAtual){
+    const retomada=seededExistingSessionId?todaySessions.find(s=>s.id===seededExistingSessionId):null;
+    const novo=Math.max(0,getElapsed()-(retomada?(retomada.duration||0):0));
+    if(novo>0){
+      if(!bySubject[sidAtual])bySubject[sidAtual]={duration:0,subject:null};
+      bySubject[sidAtual].duration+=novo;
+    }
+  }
 
   // Encontra cores das matérias
   Object.keys(bySubject).forEach(subId=>{
@@ -829,9 +881,13 @@ window.resetTimer=()=>{
   document.getElementById('btn-play').classList.remove('running');
   document.getElementById('play-icon').innerHTML='<path d="M6 4l14 8-14 8V4z"/>';
   document.title='Focadus — Cronômetro';
-  const initT=pomMode?`${String(parseInt(document.getElementById('pom-work').value)||25).padStart(2,'0')}:00`:'00:00:00';
-  document.getElementById('timer-time').textContent=initT;
-  document.getElementById('focus-time').textContent=initT;
+  if(pomMode){
+    const initT=`${String(parseInt(document.getElementById('pom-work').value)||25).padStart(2,'0')}:00`;
+    document.getElementById('timer-time').textContent=initT;
+    document.getElementById('focus-time').textContent=initT;
+  }else{
+    updateDisplay();// no modo Livre o número depende do modo escolhido (sessão ou falta hoje)
+  }
   document.getElementById('timer-sub').textContent='Pronto para estudar';
   const ring=document.getElementById('ring');ring.style.strokeDashoffset=C;ring.style.stroke='#C69A3A';ring.style.opacity=pomMode?'1':'0';
   document.getElementById('ring-layers').innerHTML='';// limpa os arcos de progresso
